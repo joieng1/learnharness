@@ -240,4 +240,12 @@ describe("one breakpoint everywhere (D8)", () => {
 		assert.ok(match, "electron/main.cjs declares SIDEBAR_AUTOCLOSE");
 		assert.equal(Number(match[1]), NARROW_WIDTH);
 	});
+
+	it("every narrow-width media query in globals.css stops just under NARROW_WIDTH", () => {
+		/** max-width queries end a hair below the breakpoint so 928px is desktop. */
+		const MEDIA_QUERY_EPSILON = 0.02;
+		const widths = [...repoFile("app/globals.css").matchAll(/@media[^{]*max-width:\s*([\d.]+)px/g)].map((m) => Number(m[1]));
+		assert.ok(widths.length > 0, "globals.css has a narrow-width media query");
+		for (const width of widths) assert.equal(width, NARROW_WIDTH - MEDIA_QUERY_EPSILON);
+	});
 });

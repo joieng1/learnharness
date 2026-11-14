@@ -1,10 +1,11 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { JetBrains_Mono, Source_Sans_3 } from "next/font/google";
 import { connection } from "next/server";
 import "katex/dist/katex.min.css";
 import "./globals.css";
 import { AppShell, SidebarProvider } from "@/components/sidebar";
 import { ActivityProvider } from "@/components/activity-dock";
+import { PhoneLayoutProvider } from "@/components/phone-layout-context";
 import { ServerEventsProvider } from "@/components/server-events";
 import { AppearanceProvider } from "@/components/settings/appearance";
 import UpdateBanner from "@/components/update-banner";
@@ -19,6 +20,18 @@ const prose = Source_Sans_3({ subsets: ["latin"], variable: "--font-sans3" });
 export const metadata: Metadata = {
 	title: "Learning Harness",
 	description: "A teacher agent with a memory — sessions, quizzes, and a knowledge graph of what you know.",
+};
+
+// cover: the page runs under the phone's home indicator, and the docks pad
+// by env(safe-area-inset-bottom). resizes-content: Android shrinks the page
+// for the keyboard; iOS ignores it and the keyboard inset covers it.
+// Pinch-zoom stays enabled (no maximumScale/userScalable) for accessibility.
+// Desktop browsers and Electron ignore the viewport meta tag.
+export const viewport: Viewport = {
+	width: "device-width",
+	initialScale: 1,
+	viewportFit: "cover",
+	interactiveWidget: "resizes-content",
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -39,15 +52,19 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 			{/* The notification channel rides OUTSIDE everything: sidebar, dock,
 				 and pages all subscribe as the polls retire (push S3, 2026-10-02). */}
 			<ServerEventsProvider>
-				<PluginsProvider>
-					<AppearanceProvider initialAppearance={appearance} initialTheme={theme}>
-						<SidebarProvider>
-							<ActivityProvider>
-								<AppShell>{children}</AppShell>
-							</ActivityProvider>
-						</SidebarProvider>
-					</AppearanceProvider>
-				</PluginsProvider>
+				{/* Above PluginsProvider so plugin chrome reads the same phone
+				    layout as the host (port decision D5). */}
+				<PhoneLayoutProvider>
+					<PluginsProvider>
+						<AppearanceProvider initialAppearance={appearance} initialTheme={theme}>
+							<SidebarProvider>
+								<ActivityProvider>
+									<AppShell>{children}</AppShell>
+								</ActivityProvider>
+							</SidebarProvider>
+						</AppearanceProvider>
+					</PluginsProvider>
+				</PhoneLayoutProvider>
 			</ServerEventsProvider>
 			{/* Auto-update banner (Wave C): fixed card, Electron-only pushes. */}
 			<UpdateBanner />

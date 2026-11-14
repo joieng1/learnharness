@@ -634,3 +634,18 @@ body {
 	outline: 1px solid var(--border);
 	border-radius: 0.25rem;
 }
+
+/* iOS Safari zooms the page when a focused text control renders under 16px.
+   Port of upstream PR #243 (decision D9): also covers the contenteditable
+   lesson fields (PathInput), and keeps a larger user-chosen prose size
+   instead of flattening it to 16px. Unlayered, so it outranks Tailwind's
+   layered utilities. The width mirrors NARROW_WIDTH in
+   components/phone-layout.ts (pinned by tests/phone-layout.test.ts). */
+@media (max-width: 927.98px) and (pointer: coarse) {
+	input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+	textarea,
+	select,
+	[contenteditable]:not([contenteditable="false"]) {
+		font-size: max(16px, var(--lh-prose-size, 16px));
+	}
+}

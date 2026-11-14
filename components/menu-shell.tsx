@@ -76,6 +76,9 @@ export function computeMenuPlacement(
 	contentHeight: number,
 	preferredSide: MenuSide,
 	align: MenuAlign,
+	/** The measured menu width; when given, a menu that would cross a
+	 *  viewport edge (a phone) slides back inside the EDGE floor. */
+	menuWidth?: number,
 ): MenuPlacement {
 	const availDown = viewport.height - EDGE - (rect.bottom + GAP);
 	const availUp = rect.top - GAP - EDGE;
@@ -91,14 +94,28 @@ export function computeMenuPlacement(
 	}
 	const avail = side === "down" ? availDown : availUp;
 	const maxHeight = Math.max(MIN_USABLE, Math.min(CAP_VH * viewport.height, avail));
-	const horizontal: Record<string, number> =
-		align === "right" ? { right: viewport.width - rect.right } : { left: rect.left };
+	const horizontal = menuWidth === undefined
+		? anchoredHorizontal(rect, viewport, align)
+		: clampedHorizontal(rect, viewport, align, menuWidth);
 	const vertical: Record<string, number> =
 		side === "down" ? { top: rect.bottom + GAP } : { bottom: viewport.height - rect.top + GAP };
 	return { side, style: { ...horizontal, ...vertical }, maxHeight };
 }
 
 type AnchorRect = { top: number; bottom: number; left: number; right: number };
+
+function anchoredHorizontal(rect: AnchorRect, viewport: { width: number }, align: MenuAlign): Record<string, number> {
+	return align === "right" ? { right: viewport.width - rect.right } : { left: rect.left };
+}
+
+/** Keeps the anchor alignment when the menu fits; otherwise pins the
+ *  menu's left edge inside [EDGE, viewport − EDGE − width]. On desktop
+ *  only menus that already overflowed the viewport move. */
+function clampedHorizontal(rect: AnchorRect, viewport: { width: number }, align: MenuAlign, menuWidth: number): Record<string, number> {
+	const left = align === "right" ? rect.right - menuWidth : rect.left;
+	const clamped = Math.max(EDGE, Math.min(left, viewport.width - EDGE - menuWidth));
+	return clamped === left ? anchoredHorizontal(rect, viewport, align) : { left: clamped };
+}
 
 /** The rect a menu places against: a virtual anchor (a text range) wins
  *  when it yields one, else the element seam. */
@@ -124,6 +141,7 @@ export function MenuShell({
 	preferredSide,
 	align = "right",
 	menuClass,
+	width,
 	children,
 	onClose,
 	ownerId,
@@ -140,6 +158,9 @@ export function MenuShell({
 	/** The menu body classes: width, border, bg, padding, text — the
 	 *  shell adds position, z-index, the height cap, and scrolling. */
 	menuClass: string;
+	/** A px width that overrides menuClass's width (model menus capped to
+	 *  a phone viewport). */
+	width?: number;
 	children: ReactNode;
 	onClose?: (reason: CloseReason) => CloseOutcome | void;
 	ownerId?: string;
@@ -235,6 +256,7 @@ export function MenuShell({
 				menuRef.current.scrollHeight,
 				preferredSide,
 				align,
+				menuRef.current.offsetWidth,
 			);
 			setPlaced(p);
 		};
@@ -262,7 +284,7 @@ export function MenuShell({
 				ref={menuRef}
 				data-testid={testid}
 				data-lh-menu=""
-				style={{ position: "fixed", left: 0, top: 0, visibility: "hidden" }}
+				style={{ position: "fixed", left: 0, top: 0, visibility: "hidden", width }}
 				className={menuClass}
 			>
 				{children}
@@ -277,7 +299,7 @@ export function MenuShell({
 			data-lh-menu=""
 			tabIndex={-1}
 			onKeyDown={onBodyKeyDown}
-			style={{ position: "fixed", zIndex: INTERACTION_LAYER_Z_BASE + layer.order, ...placed.style, maxHeight: placed.maxHeight, overflowY: "auto" }}
+			style={{ position: "fixed", zIndex: INTERACTION_LAYER_Z_BASE + layer.order, ...placed.style, maxHeight: placed.maxHeight, overflowY: "auto", width }}
 			// The body is the arrow machine's focus home (input-less menus
 			// land focus here on open) — the focus STAYS, but the browser's
 			// default blue ring around it must not draw (owner, polish
