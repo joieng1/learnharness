@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { fuzzyScore } from "@/src/core";
+import { usePhoneLayout } from "@/components/phone-layout-context";
 
 /** The model picker's search, arrow-walk, row styling and scrolling machine.
  * Models and dictation languages supply only their catalog and row content.
@@ -35,8 +36,10 @@ export function SearchMenuList<T>({
 	const [menuIdx, setMenuIdx] = useState<number | null>(null);
 	const searchRef = useRef<HTMLInputElement>(null);
 	const listRef = useRef<HTMLUListElement>(null);
+	const { touchPhone } = usePhoneLayout();
 
-	useEffect(() => { searchRef.current?.focus(); }, []);
+	// No keyboard pop-up on a phone (G5) — MenuShell lands focus on the body.
+	useEffect(() => { if (!touchPhone) searchRef.current?.focus(); }, [touchPhone]);
 	useEffect(() => {
 		if (menuIdx === null) return;
 		listRef.current?.querySelector(`[data-idx="${menuIdx}"]`)?.scrollIntoView({ block: "nearest" });

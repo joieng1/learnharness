@@ -649,3 +649,22 @@ body {
 		font-size: max(16px, var(--lh-prose-size, 16px));
 	}
 }
+
+/* Finger-sized hit box (G1, Stage 3 phone port): small toolbar controls
+   keep their painted size, but an invisible box of at least 44px around
+   them takes the tap. Only touch phones get the class (touchHitClass in
+   components/phone-layout.ts), so desktop markup and hit areas are
+   unchanged. 44px mirrors TOUCH_HIT_HEIGHT (pinned by
+   tests/phone-layout-controls.test.ts). */
+.lh-touch-hit {
+	position: relative;
+}
+.lh-touch-hit::after {
+	content: "";
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: max(100%, 44px);
+	height: max(100%, 44px);
+	transform: translate(-50%, -50%);
+}

@@ -14,6 +14,10 @@ import type { SelectionAction } from "./selection-toolbar";
 import type { SideThreadAnchor, SideThreadOpenArgs, SideThreadState } from "./use-side-thread";
 import { useOptionalInteractionLayers } from "./interaction-layers";
 import { isInteractionScopeEligible } from "./plugin-input-focus";
+import { isSubmitEnter } from "./enter-chord";
+import { SIDE_PANEL_SHEET } from "./phone-layout";
+import { usePhoneLayout } from "./phone-layout-context";
+import { cn } from "@/lib/utils";
 
 /** Ask always opens the selected teaching segment's ONE conversation. Cite
  * is an independent action that inserts a chip into the main/thinking field. */
@@ -74,6 +78,7 @@ export function SideThreadBody({ state, chatId, draft, readDraft, dictation, onD
 	state: SideThreadState; chatId?: string; onDragStart?: (event: React.PointerEvent<HTMLElement>) => void;
 } & SideThreadHandlers) {
 	const controller = useOptionalInteractionLayers();
+	const { enterInsertsNewline } = usePhoneLayout();
 	const [question, setQuestion] = useState(draft || state.failedQuestion || "");
 	const draftRef = useRef(question);
 	const draftWriter = useRef(onDraftChange); draftWriter.current = onDraftChange;
@@ -155,7 +160,7 @@ export function SideThreadBody({ state, chatId, draft, readDraft, dictation, onD
 						value={question} maxLength={SIDE_QUESTION_MAX_CHARS} placeholder={sideThreadPlaceholder(state)} onChange={(event) => changeDraft(event.target.value)}
 						onKeyDown={(event) => {
 							if (event.nativeEvent.isComposing || !isInteractionScopeEligible(inputRef.current, controller)) return;
-							if (event.key === "Enter" && (!event.shiftKey || event.metaKey || event.ctrlKey)) { event.preventDefault(); event.stopPropagation(); void submit(); }
+							if (isSubmitEnter(event, enterInsertsNewline)) { event.preventDefault(); event.stopPropagation(); void submit(); }
 							else if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); onClose(); }
 						}} />
 					{dictation && <div className="absolute right-1 bottom-1 flex h-7 items-center gap-1">
@@ -283,6 +288,10 @@ export function SideThreadPopover({ state, chatId, composer, ...handlers }: { st
 			onPointerDown={(event) => startResize(event, edge)} />)}
 	</div>;
 }
+/** Docked beside the lesson; on a phone (D11) a full-screen sheet — a 22rem
+ *  column would leave the lesson about 38px wide. */
 export function SideThreadPanel({ children }: { children: ReactNode }) {
-	return <aside aria-label="Side question" data-testid="side-thread-panel" className="flex w-[22rem] shrink-0 flex-col border-l border-border bg-background p-3">{children}</aside>;
+	const { sheetDialogs } = usePhoneLayout();
+	return <aside aria-label="Side question" data-testid="side-thread-panel"
+		className={cn("flex w-[22rem] shrink-0 flex-col border-l border-border bg-background p-3", sheetDialogs && SIDE_PANEL_SHEET)}>{children}</aside>;
 }

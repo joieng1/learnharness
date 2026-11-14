@@ -11,6 +11,7 @@
 
 import { useLayoutEffect, useRef, useState, type ComponentPropsWithRef, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { usePhoneLayout } from "@/components/phone-layout-context";
 
 /** A section block: pronounced mono heading + content. */
 export function SettingsSection({
@@ -54,7 +55,8 @@ export function SettingsGroup({
 }
 
 /** One label + one control. Label left (with optional muted hint), control
- *  right — the settings row shape. */
+ *  right — the settings row shape. On a phone the label sits above the
+ *  control (G4): side by side, wide controls ran off the screen. */
 export function SettingsRow({
 	label,
 	hint,
@@ -70,8 +72,9 @@ export function SettingsRow({
 	 *  control is inert (parent off, no file yet, …). */
 	dimmed?: boolean;
 }) {
+	const { sheetDialogs } = usePhoneLayout();
 	return (
-		<div data-testid={testid} className={cn("flex items-center justify-between gap-4 py-1", dimmed && "opacity-40")}>
+		<div data-testid={testid} className={cn("flex items-center justify-between gap-4 py-1", sheetDialogs && "flex-col items-start gap-1.5", dimmed && "opacity-40")}>
 			<span className="min-w-0">
 				<span className="block font-prose text-(length:--lh-prose-size)">{label}</span>
 				{hint && <span className="block text-xs text-muted-foreground/70">{hint}</span>}

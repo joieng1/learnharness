@@ -171,17 +171,53 @@ export function confidenceHitHeight(touchPhone: boolean): ConfidenceHitHeight {
 /** The 22rem desktop model-menu width. */
 const MODEL_MENU_WIDTH = 352;
 /** 12px gutter on each side of a viewport-capped menu. */
-const MODEL_MENU_GUTTERS = 24;
+const MENU_GUTTERS = 24;
+
+/** Desktop widths of the other fixed-width settings menus (their Tailwind
+ *  classes): passing these as MenuShell `width` is pixel-identical on desktop. */
+export const CACHE_RETENTION_MENU_WIDTH = 320; // w-80
+export const FONT_MENU_WIDTH = 288; // w-[18rem]
+export const KEYS_MENU_WIDTH = 288; // w-72
+
+/** Any fixed-width menu: its desktop width, capped to the viewport with a
+ *  gutter so it never runs off a phone screen. */
+export function cappedMenuWidth(desktopWidth: number, viewportWidth: number): number {
+	return Math.min(desktopWidth, viewportWidth - MENU_GUTTERS);
+}
 
 /** Model menus: the desktop width, capped to the viewport with a gutter. */
 export function modelMenuWidth(viewportWidth: number): number {
-	return Math.min(MODEL_MENU_WIDTH, viewportWidth - MODEL_MENU_GUTTERS);
+	return cappedMenuWidth(MODEL_MENU_WIDTH, viewportWidth);
+}
+
+/** Merged over a small control on a touch phone: a TOUCH_HIT_HEIGHT hit box
+ *  (globals.css `.lh-touch-hit`) around the painted control, which keeps
+ *  its size. Empty elsewhere, so desktop markup is unchanged. */
+export const TOUCH_HIT_CLASS = "lh-touch-hit";
+
+export function touchHitClass(touchPhone: boolean): string | false {
+	return touchPhone && TOUCH_HIT_CLASS;
+}
+
+/** A popover centred over a control near the screen edge would be cut off
+ *  on a phone: anchor it to the control's leading edge and cap its width. */
+export type PopoverAlign = "center" | "start";
+
+export function statsPopoverAlign(narrowBrowser: boolean): PopoverAlign {
+	return narrowBrowser ? "start" : "center";
 }
 
 /** Merged (cn) over a centred dialog frame when `sheetDialogs`: the frame
  *  fills the phone screen, clear of the notch and the home indicator. */
 export const SHEET_DIALOG_FRAME =
 	"h-dvh max-h-none w-screen max-w-none rounded-none border-0 pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]";
+
+/** Merged (cn) over the docked side-question column when `sheetDialogs`:
+ *  it covers the phone screen, clear of the notch, and its composer rides
+ *  above the keyboard (--lh-keyboard-inset is the home-indicator inset
+ *  while the keyboard is down). z-60 matches the floating popover. */
+export const SIDE_PANEL_SHEET =
+	"fixed inset-0 z-[60] w-auto border-l-0 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-[calc(0.75rem+var(--lh-keyboard-inset,0px))]";
 
 /** Travel in px that turns a press into a pan (the graph's click slop). */
 export const GESTURE_SLOP = 4;

@@ -41,6 +41,9 @@ import {
 	type ThemeColorKey,
 } from "@/src/core";
 import { MenuShell } from "@/components/menu-shell";
+import { FONT_MENU_WIDTH } from "@/components/phone-layout";
+import { useCappedMenuWidth, usePhoneLayout } from "@/components/phone-layout-context";
+import { cn } from "@/lib/utils";
 import { useInteractionLayers } from "@/components/interaction-layers";
 import { Hint } from "@/components/ui/hint";
 import { BUNDLED_READING_FONTS, useAppearance } from "./appearance.tsx";
@@ -198,6 +201,8 @@ export function AppearanceSection({
 	onSectionChange: (next: AppearanceSettings) => boolean | Promise<boolean>;
 }) {
 	const { appearance: resolved, activeTheme, colors, themes, refreshThemes } = useAppearance();
+	const { sheetDialogs } = usePhoneLayout();
+	const fontMenuWidth = useCappedMenuWidth(FONT_MENU_WIDTH);
 	const md = appearance?.mdRendering;
 
 	// The font dropdown's open state + its enumeration cache. undefined =
@@ -312,7 +317,8 @@ export function AppearanceSection({
 						Reset all
 					</button>
 				</div>
-				<div className="grid grid-cols-2 gap-x-10 gap-y-2">
+				{/* One column on a phone (G4): two label+swatch pairs overflow ~350px. */}
+				<div className={cn("grid grid-cols-2 gap-x-10 gap-y-2", sheetDialogs && "grid-cols-1")}>
 					{THEME_COLOR_KEYS.map((key) => (
 						<ColorOverrideRow
 							key={key}
@@ -363,6 +369,7 @@ export function AppearanceSection({
 							anchorTestid="font-trigger"
 							testid="font-menu"
 							onClose={() => { setFontMenuOpen(false); return "closed"; }}
+							width={fontMenuWidth}
 							menuClass="flex w-[18rem] flex-col gap-0.5 rounded-xl border border-border bg-card p-2 text-xs shadow-xl"
 						>
 							<FontMenuList

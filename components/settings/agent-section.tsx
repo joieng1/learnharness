@@ -55,7 +55,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { CacheRetention } from "@earendil-works/pi-ai";
 import { CacheRetentionMenu, cacheRetentionLabel } from "./cache-retention-menu.tsx";
 import { MenuShell } from "@/components/menu-shell";
-import { useModelMenuWidth } from "@/components/phone-layout-context";
+import { CACHE_RETENTION_MENU_WIDTH } from "@/components/phone-layout";
+import { useCappedMenuWidth, useModelMenuWidth, usePhoneLayout } from "@/components/phone-layout-context";
 import { useInteractionLayers } from "@/components/interaction-layers";
 import { useSettingsSaved } from "@/components/settings-signal";
 import { defaultOrderLevel, populateLevel } from "@/components/thinking-default";
@@ -371,6 +372,8 @@ export function AgentSection({
 }) {
 	const { catalog: body, failed: catalogFailed, refresh: refreshCatalog } = useModelCatalog();
 	const menuWidth = useModelMenuWidth();
+	const cacheMenuWidth = useCappedMenuWidth(CACHE_RETENTION_MENU_WIDTH);
+	const { sheetDialogs } = usePhoneLayout();
 	const catalog = body?.models;
 	const slots = body?.slots;
 	/** The live search state (/api/search) — the row's reason line. */
@@ -693,7 +696,7 @@ export function AgentSection({
 							    span holding BOTH triggers of the open menu. */}
 							<span
 								ref={thisMenuOpen ? menuAnchorRef : undefined}
-								className={`relative flex items-center gap-2 ${advancedModels ? "shrink-0" : ""}`}
+								className={cn("relative flex items-center gap-2", advancedModels && "shrink-0", sheetDialogs && "flex-wrap")}
 							>
 								{slot !== "strong" && <><ChatGPTBackgroundAccess provider={coord?.provider} /><NativeSubscriptionBackgroundAccess provider={coord?.provider} /></>}
 								<MenuTrigger
@@ -733,6 +736,7 @@ export function AgentSection({
 									anchorTestid={`slot-cache-${slot}`}
 									testid={`slot-cache-menu-${slot}`}
 									onClose={() => { setOpenMenu(null); return "closed"; }}
+									width={cacheMenuWidth}
 									menuClass="flex w-80 flex-col gap-0.5 rounded-xl border border-border bg-card p-2 text-xs shadow-xl"
 								>
 									<CacheRetentionMenu value={override?.cacheRetention} onPick={(value) => {

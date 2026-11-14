@@ -41,6 +41,8 @@ import { ProviderMenuList } from "./model-menu.tsx";
 import { useInteractionLayer, useInteractionLayers, useOptionalInteractionLayers } from "@/components/interaction-layers";
 import { isInteractionScopeEligible } from "@/components/plugin-input-focus";
 import { MenuShell } from "@/components/menu-shell";
+import { KEYS_MENU_WIDTH } from "@/components/phone-layout";
+import { useCappedMenuWidth } from "@/components/phone-layout-context";
 import { notifySettingsSaved } from "@/components/settings-signal";
 import { DictationLanguageSetting } from "@/components/dictation-language";
 
@@ -312,6 +314,7 @@ function AddProviderRow({
 	const [open, setOpen] = useState(false);
 	const anchorRef = useRef<HTMLDivElement>(null);
 	const interactions = useInteractionLayers();
+	const menuWidth = useCappedMenuWidth(KEYS_MENU_WIDTH);
 
 	useEffect(() => {
 		if (!open) return;
@@ -344,6 +347,7 @@ function AddProviderRow({
 					testid="add-provider-menu"
 					onClose={() => { setOpen(false); return "closed"; }}
 					preferredSide="down"
+					width={menuWidth}
 					menuClass="flex w-72 flex-col rounded-xl border border-border bg-card p-2 text-xs shadow-xl"
 				>
 					{/* Close on pick (owner, fix wave): a chosen provider ends

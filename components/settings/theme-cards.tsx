@@ -16,6 +16,7 @@
 import { useRef, useState } from "react";
 import { CheckIcon, DownloadIcon, Trash2Icon, UploadIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { usePhoneLayout } from "@/components/phone-layout-context";
 import { exportThemeFile, type AppearanceSettings, type Theme } from "@/src/core";
 
 /** The selected card's frame: a 2px gap in the dialog surface, then a 1px
@@ -86,6 +87,7 @@ export function ThemeCards({
 	onImported: (theme: Theme) => void;
 }) {
 	const fileRef = useRef<HTMLInputElement>(null);
+	const { sheetDialogs } = usePhoneLayout();
 	const [importError, setImportError] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
 
@@ -142,7 +144,8 @@ export function ThemeCards({
 					Export JSON
 				</button>
 			</div>
-			<div className="grid grid-cols-3 gap-3">
+			{/* Two columns on a phone (G4): three previews at ~100px are unreadable. */}
+			<div className={cn("grid grid-cols-3 gap-3", sheetDialogs && "grid-cols-2")}>
 				{themes.map((theme) => {
 					const selected = theme.id === active.id;
 					return (

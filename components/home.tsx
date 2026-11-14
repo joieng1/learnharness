@@ -20,7 +20,7 @@ import { PathInput } from "@/components/path-input";
 import { AttachFilesButton } from "@/components/attach-files-button";
 import { SessionStarter } from "@/components/start-session";
 import { isSubmitEnter } from "@/components/enter-chord";
-import { usePhoneLayout } from "@/components/phone-layout-context";
+import { useMountTouchPhone, usePhoneLayout } from "@/components/phone-layout-context";
 import type { TurnUsage } from "@/src/core";
 
 /**
@@ -44,6 +44,9 @@ export function Home({
 }) {
 	const controller = useOptionalInteractionLayers();
 	const { enterInsertsNewline } = usePhoneLayout();
+	// Read at mount, not from the context: PathInput takes autoFocus on its
+	// first render, while the context still holds the desktop layout (G6).
+	const mountTouchPhone = useMountTouchPhone();
 	const router = useRouter();
 	const pathname = usePathname();
 	const bodyRef = useRef<HTMLDivElement>(null);
@@ -284,7 +287,7 @@ export function Home({
 							}
 						}}
 						placeholder={mode === "practice" ? "What do you want to practice?" : "What do you want to learn?"}
-						autoFocus
+						autoFocus={!mountTouchPhone}
 						className="field-sizing-content lh-input max-h-48 min-h-10 flex-1 resize-none bg-transparent px-2.5 py-2 outline-none placeholder:text-muted-foreground"
 					/>
 					<AttachFilesButton editorRef={topicInputRef} />

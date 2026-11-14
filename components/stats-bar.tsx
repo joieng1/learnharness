@@ -7,6 +7,7 @@ import { ModelControl, catalogLimits, useModelCatalog } from "@/components/model
 import { usePopoverDismiss } from "@/components/popover-dismiss";
 import { INTERACTION_LAYER_Z_BASE } from "@/components/host-dialog";
 import { usePhoneLayout } from "@/components/phone-layout-context";
+import { statsPopoverAlign, touchHitClass } from "@/components/phone-layout";
 import { cn } from "@/lib/utils";
 
 export function formatContextMeasurement(tokens: number | null, limit: number | null): string {
@@ -83,7 +84,8 @@ export function StatsBar({
 	const barRef = useRef<HTMLDivElement>(null);
 	// A phone cannot fit the summary, mic and model pills on one line: the
 	// row wraps so the model control drops below instead of crushing the mic.
-	const { wrapControls } = usePhoneLayout();
+	const { wrapControls, touchPhone } = usePhoneLayout();
+	const popoverAlign = statsPopoverAlign(wrapControls);
 	const panelRef = useRef<HTMLDivElement>(null);
 	const popupLayer = usePopoverDismiss(barRef, open && !!(chatId || turns.length), () => setOpen(false), { layerRootRef: panelRef });
 	// The picker reports its effective selection. CLI windows are session-
@@ -133,7 +135,7 @@ export function StatsBar({
 				onClick={() => setOpen((o) => !o)}
 				aria-expanded={open}
 				data-testid="stats-summary"
-				className="flex items-center gap-1.5 tabular-nums transition-colors hover:text-foreground"
+				className={cn("flex items-center gap-1.5 tabular-nums transition-colors hover:text-foreground", touchHitClass(touchPhone))}
 			>
 				<span data-testid="stats-context">
 					{contextLabel}
@@ -146,7 +148,12 @@ export function StatsBar({
 						ref={panelRef}
 						data-testid="stats-detail"
 						style={{ zIndex: INTERACTION_LAYER_Z_BASE + popupLayer.order }}
-						className="absolute bottom-full left-1/2 mb-1.5 w-72 -translate-x-1/2 rounded-xl border bg-card p-3 text-xs shadow-xl"
+						className={cn(
+							"absolute bottom-full mb-1.5 w-72 rounded-xl border bg-card p-3 text-xs shadow-xl",
+							// Phones (G2): from the button's left edge, never wider than the
+							// screen less the dock gutters — centred, it ran off the left.
+							popoverAlign === "center" ? "left-1/2 -translate-x-1/2" : "left-0 max-w-[calc(100vw-2rem)]",
+						)}
 					>
 						<div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
 							Session stats

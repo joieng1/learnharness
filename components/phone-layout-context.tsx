@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useLayoutEffect, useState } from "react";
-import { DESKTOP_LAYOUT, keyboardInset, modelMenuWidth, phoneLayout, type PhoneLayout } from "@/components/phone-layout";
+import { cappedMenuWidth, DESKTOP_LAYOUT, keyboardInset, modelMenuWidth, phoneLayout, type PhoneLayout } from "@/components/phone-layout";
 
 /**
  * Live phone layout (upstream PR #243, lh-m5s): reads the viewport in a
@@ -64,6 +64,24 @@ const KeyboardInsetContext = createContext<KeyboardInset>(NO_KEYBOARD);
 
 export function useModelMenuWidth(): number {
 	return modelMenuWidth(usePhoneLayout().viewportWidth);
+}
+
+/** A fixed-width menu's width, capped to the live viewport. */
+export function useCappedMenuWidth(desktopWidth: number): number {
+	return cappedMenuWidth(desktopWidth, usePhoneLayout().viewportWidth);
+}
+
+/** Whether this is a touch phone, decided once at mount straight from the
+ *  window. For one-shot mount behaviour (autofocus): during hydration the
+ *  context still holds the desktop layout, and a mount effect runs before
+ *  the provider's measurement lands. Not rendered into markup, so reading
+ *  the window here cannot cause a hydration mismatch. */
+export function useMountTouchPhone(): boolean {
+	// matchMedia is absent in a bare test DOM: no reading → the desktop default.
+	const [touchPhone] = useState(
+		() => typeof window !== "undefined" && typeof window.matchMedia === "function" && readLayout().touchPhone,
+	);
+	return touchPhone;
 }
 
 /** The keyboard's live inset — the docks read it to stay above the keyboard. */

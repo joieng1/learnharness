@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { INTERACTION_LAYER_Z_BASE } from "./host-dialog";
+import { usePhoneLayout } from "./phone-layout-context";
 import { InteractionLayerOwner, useInteractionLayer, useInteractionLayers, type CloseOutcome, type CloseReason } from "./interaction-layers";
 
 /**
@@ -169,6 +170,7 @@ export function MenuShell({
 	const [placed, setPlaced] = useState<MenuPlacement | null>(null);
 	const focusedOnceRef = useRef(false);
 	const controller = useInteractionLayers();
+	const { touchPhone } = usePhoneLayout();
 	const anchor = () => {
 		if (anchorRef) return anchorRef.current;
 		if (anchorTestid !== undefined && typeof document !== "undefined") return document.querySelector(`[data-testid="${anchorTestid}"]`);
@@ -200,9 +202,11 @@ export function MenuShell({
 		focusedOnceRef.current = true;
 		const el = menuRef.current;
 		if (!el) return;
-		const input = el.querySelector<HTMLElement>("input, textarea");
+		// A phone's keyboard would cover the menu it just opened (G5): land
+		// on the body there; a tap on the search field still brings it up.
+		const input = touchPhone ? null : el.querySelector<HTMLElement>("input, textarea");
 		(input ?? el).focus();
-	}, [placed, layer.isTop]);
+	}, [placed, layer.isTop, touchPhone]);
 
 	// The standard arrow machine for menus WITHOUT a search (owner: when a
 	// dropdown is expanded, the arrow keys cycle the options and never
