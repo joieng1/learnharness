@@ -11,15 +11,20 @@ import { AppearanceProvider } from "@/components/settings/appearance";
 import UpdateBanner from "@/components/update-banner";
 import { PluginsProvider } from "@/components/plugins";
 import { readThemeBoot } from "@/src/server";
+import { APP_DESCRIPTION, APP_TITLE, HOME_SCREEN_NAME } from "@/lib/app-identity";
 
 // Chrome = JetBrains Mono, teaching prose = Source Sans 3, titles = CMU
 // Serif (the bundled lh-cmu @font-face in globals.css — no CDN).
 const ui = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains" });
 const prose = Source_Sans_3({ subsets: ["latin"], variable: "--font-sans3" });
 
+// appleWebApp: the home-screen name and standalone launch on iOS (the
+// manifest covers other browsers). "default" status bar: the page starts
+// below the status bar, so the top chrome never sits under the clock.
 export const metadata: Metadata = {
-	title: "Learning Harness",
-	description: "A teacher agent with a memory — sessions, quizzes, and a knowledge graph of what you know.",
+	title: APP_TITLE,
+	description: APP_DESCRIPTION,
+	appleWebApp: { capable: true, title: HOME_SCREEN_NAME, statusBarStyle: "default" },
 };
 
 // cover: the page runs under the phone's home indicator, and the docks pad
