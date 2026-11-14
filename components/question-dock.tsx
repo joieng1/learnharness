@@ -9,6 +9,9 @@ import { useEnterSubmits } from "@/components/enter-submits";
 import { useOptionalInteractionLayers } from "./interaction-layers";
 import { isInteractionScopeEligible } from "./plugin-input-focus";
 import { PathInput } from "@/components/path-input";
+import { enterHint, isSubmitEnter } from "@/components/enter-chord";
+import { usePhoneLayout } from "@/components/phone-layout-context";
+import { RAIL_HIT_HEIGHT } from "@/components/phone-layout";
 import { MalformedQuestion } from "@/components/malformed-question";
 import { ToolContentResponse } from "@/components/ai-elements/message";
 import { QuestionPreview } from "@/components/question-preview";
@@ -264,6 +267,14 @@ export function QuestionDockBar({
 }
 
 /** The expanded question: label, question, options, and the unified bottom row. */
+/** The confidence slider's hit box: on a touch phone it grows to a
+ *  finger-sized box centred on the same track, so the painted rail above
+ *  never moves; elsewhere the slider keeps its h-4 class. */
+function confidenceHitBox(hitHeight: number): React.CSSProperties {
+	if (hitHeight === RAIL_HIT_HEIGHT) return {};
+	return { height: hitHeight, top: "50%", transform: "translateY(-50%)" };
+}
+
 function QuestionDockForm({
 	viewReader,
 	toolName,
@@ -284,6 +295,7 @@ function QuestionDockForm({
 }: Omit<QuestionDockProps, "expanded" | "onExpand" | "reveal">) {
 	const kind = toolQuestionKind(toolName);
 	const controller = useOptionalInteractionLayers();
+	const { enterInsertsNewline, confidenceHitHeight } = usePhoneLayout();
 	const rootRef = useRef<HTMLDivElement>(null);
 
 	// Canonical QuestionData, built once per question. Quiz options are
@@ -864,7 +876,7 @@ function QuestionDockForm({
 									}
 									setConfIdx(best);
 								}}
-								style={{ color: CONFIDENCE_COLORS[confIdx] }}
+								style={{ color: CONFIDENCE_COLORS[confIdx], ...confidenceHitBox(confidenceHitHeight) }}
 								className={cn(
 									"absolute inset-0 h-4 w-full cursor-pointer appearance-none bg-transparent outline-none",
 									"[&::-webkit-slider-runnable-track]:h-4 [&::-webkit-slider-runnable-track]:bg-transparent",
@@ -927,7 +939,8 @@ function QuestionDockForm({
 								}
 								// Chat convention: Enter submits, Shift+Enter is a newline;
 								// ⌘/Ctrl+Enter also submits (universal across the app).
-								if (e.key === "Enter" && (e.metaKey || e.ctrlKey || !e.shiftKey)) {
+								// On a touch phone Enter is the newline and Submit submits.
+								if (isSubmitEnter(e, enterInsertsNewline)) {
 									e.preventDefault();
 									submit();
 								}
@@ -958,7 +971,7 @@ function QuestionDockForm({
 								// THE STANDARD CHORD (owner round 5, 2026-10-05): Enter
 								// submits, Shift+Enter is a newline, ⌘/Ctrl+Enter works
 								// too — identical to the practice dock and the composer.
-								if (e.key === "Enter" && (!e.shiftKey || e.metaKey || e.ctrlKey)) {
+								if (isSubmitEnter(e, enterInsertsNewline)) {
 									e.preventDefault();
 									submit();
 								}
@@ -974,7 +987,7 @@ function QuestionDockForm({
 					)}
 					<div className="flex items-center justify-between gap-2 p-1">
 						<span aria-hidden className="pl-1.5 text-xs text-muted-foreground">
-								{compactionRunning ? "compacting session…" : "↵ submits · ⇧↵ newline"}
+								{compactionRunning ? "compacting session…" : enterHint(enterInsertsNewline)}
 						</span>
 						<Button
 							type="submit"

@@ -139,14 +139,18 @@ export function capDockHeight(measured: number, keyboardMax: number): number {
 
 /** What Enter does in a text field. A phone keyboard has no Shift+Enter, so
  *  where Enter inserts newlines the Send/Submit button submits; ⌘/Ctrl+Enter
- *  submits everywhere. Callers pass the layout's `enterInsertsNewline`. */
+ *  submits everywhere. Callers pass the layout's `enterInsertsNewline`.
+ *  `explicitSubmit` is an Enter the app dispatched to submit a field (the
+ *  citation popover's Send) — a request, not typing, so the layout never
+ *  turns it into a newline. */
 export function enterKey(input: {
 	enterInsertsNewline: boolean;
 	shiftKey: boolean;
 	metaKey: boolean;
 	ctrlKey: boolean;
+	explicitSubmit?: boolean;
 }): "newline" | "submit" {
-	if (input.metaKey || input.ctrlKey) return "submit";
+	if (input.explicitSubmit || input.metaKey || input.ctrlKey) return "submit";
 	if (input.enterInsertsNewline || input.shiftKey) return "newline";
 	return "submit";
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, type RefObject } from "react";
+import { capDockHeight } from "@/components/phone-layout";
 
 const useIsoLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
@@ -46,11 +47,18 @@ interface DockHeightElements {
 
 const pixels = (value: string) => Number.parseFloat(value) || 0;
 
+/** No on-screen keyboard: the column's own height is the only limit. */
+const UNCAPPED_COLUMN = Infinity;
+
 /** Read natural geometry before writing any constraints. Cancel the shell's
  * animated height out of both ancestor measurements, then substitute its
  * natural content and borders. This stays valid during a WAAPI height morph
- * and when the outer viewport is already capped. */
-export function syncDockHeight(elements: DockHeightElements, expanded: boolean) {
+ * and when the outer viewport is already capped.
+ *
+ * `maxColumnHeight` is the room an on-screen keyboard leaves (phone): iOS
+ * keeps the column full height while the keyboard covers its bottom, so the
+ * dock budgets against whichever is smaller. */
+export function syncDockHeight(elements: DockHeightElements, expanded: boolean, maxColumnHeight = UNCAPPED_COLUMN) {
 	const { column, block, viewport, body, shell, content } = elements;
 	// QuestionDock keeps a laid-out form in an invisible h-0 wrapper;
 	// PracticeDock removes its form. Neither hidden form is a height input.
@@ -59,7 +67,7 @@ export function syncDockHeight(elements: DockHeightElements, expanded: boolean) 
 	const shellStyle = getComputedStyle(shell);
 	const questionStyle = question ? getComputedStyle(question) : null;
 	const budget = dockHeightBudget({
-		columnHeight: column.clientHeight,
+		columnHeight: capDockHeight(column.clientHeight, maxColumnHeight),
 		outsideHeight: Math.max(height(block) - height(viewport), 0),
 		beforeShellHeight: Math.max(height(body) - height(shell), 0),
 		shellBorderHeight: pixels(shellStyle.borderTopWidth) + pixels(shellStyle.borderBottomWidth),
@@ -92,7 +100,7 @@ interface DockHeightRefs {
 
 export function useDockHeight({
 	scrollRef, blockRef, viewportRef, bodyRef, shellRef, contentRef,
-	expanded, enabled, mode, onScrollbarInset, onHeight, onLayout,
+	expanded, enabled, mode, onScrollbarInset, onHeight, onLayout, maxColumnHeight = UNCAPPED_COLUMN,
 }: DockHeightRefs & {
 	expanded: boolean;
 	enabled: boolean;
@@ -103,6 +111,8 @@ export function useDockHeight({
 	onHeight: (height: number) => void;
 	/** Constraints are applied before notifying an active opening morph. */
 	onLayout?: () => void;
+	/** The room above an on-screen keyboard (see syncDockHeight). */
+	maxColumnHeight?: number;
 }) {
 	const measure = useCallback(() => {
 		const column = scrollRef.current;
@@ -113,7 +123,7 @@ export function useDockHeight({
 		const content = contentRef.current;
 		if (!column || !block || !viewport || !body || !shell || !content) return;
 		onScrollbarInset(Math.round((column.offsetWidth - column.clientWidth) / 2));
-		if (enabled) syncDockHeight({ column, block, viewport, body, shell, content }, expanded);
+		if (enabled) syncDockHeight({ column, block, viewport, body, shell, content }, expanded, maxColumnHeight);
 		else {
 			block.style.removeProperty("--dock-max-h");
 			viewport.style.removeProperty("max-height");
@@ -125,7 +135,7 @@ export function useDockHeight({
 		// did not rerender DockOverlay. Keep its transcript reserve current,
 		// but never report a mid-morph height.
 		if (shell.getAnimations().length === 0) onHeight(block.getBoundingClientRect().height);
-	}, [scrollRef, blockRef, viewportRef, bodyRef, shellRef, contentRef, expanded, enabled, onScrollbarInset, onHeight, onLayout]);
+	}, [scrollRef, blockRef, viewportRef, bodyRef, shellRef, contentRef, expanded, enabled, onScrollbarInset, onHeight, onLayout, maxColumnHeight]);
 
 	// Imperative constraints land before the overlay's later layout effect
 	// measures its morph target/reserve, and before paint (including reveal).

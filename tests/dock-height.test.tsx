@@ -94,10 +94,11 @@ Object.defineProperty(dom.window.HTMLElement.prototype, "offsetWidth", { configu
 Object.defineProperty(dom.window.HTMLElement.prototype, "scrollHeight", { configurable: true, get() { return Number(this.dataset.scrollHeight ?? 0); } });
 
 const ignoreHeight = () => {};
-function Fixture({ expanded = true, practice = false, enabled = true, inspected, onHeight = ignoreHeight, onLayout }: {
+function Fixture({ expanded = true, practice = false, enabled = true, inspected, onHeight = ignoreHeight, onLayout, maxColumnHeight }: {
 	expanded?: boolean; practice?: boolean; enabled?: boolean; inspected?: (block: HTMLDivElement) => void;
 	onHeight?: (height: number) => void;
 	onLayout?: () => void;
+	maxColumnHeight?: number;
 }) {
 	const scrollRef = useRef<HTMLDivElement>(null);
 	const blockRef = useRef<HTMLDivElement>(null);
@@ -107,7 +108,7 @@ function Fixture({ expanded = true, practice = false, enabled = true, inspected,
 	const contentRef = useRef<HTMLDivElement>(null);
 	const [inset, setInset] = useState(0);
 	useDockHeight({ scrollRef, blockRef, viewportRef, bodyRef, shellRef, contentRef,
-		expanded, enabled, mode: practice ? "practice:p1" : "question:q1", onScrollbarInset: setInset, onHeight, onLayout });
+		expanded, enabled, mode: practice ? "practice:p1" : "question:q1", onScrollbarInset: setInset, onHeight, onLayout, maxColumnHeight });
 	// Like DockOverlay's later morph/reserve layout effect: constraints must
 	// already be applied in this same commit, not an after-paint correction.
 	useLayoutEffect(() => { if (blockRef.current) inspected?.(blockRef.current); });
@@ -325,5 +326,29 @@ describe("wheel routing — question, short-window content, then transcript", ()
 		question.style.overflowY = "hidden";
 		assert.equal(wheel(-20), true, "hidden and visible boxes are not scroll containers");
 		assert.equal(wheel(0), false);
+	});
+
+	it("budgets against the room an on-screen keyboard leaves, never a taller column", async () => {
+		await withFixture(async (host, render) => {
+			await render();
+			const elements = { column: part(host, "column"), block: part(host, "block"), viewport: part(host, "viewport"),
+				body: part(host, "body"), shell: part(host, "shell"), content: part(host, "content") };
+			const uncapped = syncDockHeight(elements, true);
+			const capped = syncDockHeight(elements, true, 400);
+			assert.ok(capped.viewportMaxHeight < uncapped.viewportMaxHeight);
+			// A cap above the column changes nothing: the column still decides.
+			assert.deepEqual(syncDockHeight(elements, true, 10_000), uncapped);
+		});
+	});
+	it("the hook applies the keyboard cap to the viewport and re-measures when it changes", async () => {
+		await withFixture(async (host, render) => {
+			await render();
+			const open = part(host, "viewport").style.maxHeight;
+			await render({ maxColumnHeight: 400 });
+			const keyboardUp = part(host, "viewport").style.maxHeight;
+			assert.ok(Number.parseFloat(keyboardUp) < Number.parseFloat(open));
+			await render({ maxColumnHeight: Infinity });
+			assert.equal(part(host, "viewport").style.maxHeight, open);
+		});
 	});
 });

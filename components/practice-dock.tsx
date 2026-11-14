@@ -10,6 +10,8 @@ import { useEnterSubmits } from "@/components/enter-submits";
 import { useOptionalInteractionLayers } from "./interaction-layers";
 import { isInteractionScopeEligible } from "./plugin-input-focus";
 import { PathInput } from "@/components/path-input";
+import { enterHint, isSubmitEnter } from "@/components/enter-chord";
+import { usePhoneLayout } from "@/components/phone-layout-context";
 import type { PrepareThinkingSubmission } from "./plugin-submission-adapters";
 import { cn } from "@/lib/utils";
 
@@ -67,6 +69,7 @@ export interface PracticeDockProps {
 
 export function PracticeDock({ viewReader, problemCallId, input, expanded, onExpand, onSubmit, onPrepareSubmission, customInput, hasPendingInput = false, preparing = false, onEscape, compactionRunning = false }: PracticeDockProps) {
 	const controller = useOptionalInteractionLayers();
+	const { enterInsertsNewline } = usePhoneLayout();
 	const rootRef = useRef<HTMLElement>(null);
 	const [nativeThinking, setNativeThinking] = useState("");
 	const custom = useRef(customInput); custom.current = customInput;
@@ -183,7 +186,8 @@ export function PracticeDock({ viewReader, problemCallId, input, expanded, onExp
 						}
 						// Enter SENDS — the single lane (owner round 2, 2026-10-05);
 						// Shift+Enter is the newline, ⌘/Ctrl+Enter the chord too.
-						if (e.key === "Enter" && (!e.shiftKey || e.metaKey || e.ctrlKey)) {
+						// On a touch phone Enter is the newline and Send sends.
+						if (isSubmitEnter(e, enterInsertsNewline)) {
 							e.preventDefault();
 							submit();
 						}
@@ -199,7 +203,7 @@ export function PracticeDock({ viewReader, problemCallId, input, expanded, onExp
 				    field 10 − p-1 (4) = button 6. */}
 				<div className="flex items-center justify-between gap-2 p-1">
 					<span aria-hidden className="pl-1.5 text-xs text-muted-foreground">
-						{compactionRunning ? "compacting session…" : "↵ submits · ⇧↵ newline"}
+						{compactionRunning ? "compacting session…" : enterHint(enterInsertsNewline)}
 					</span>
 					<Button
 						type="button"

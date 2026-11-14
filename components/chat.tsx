@@ -40,6 +40,8 @@ import { blurAfterPointerClick } from "@/components/focus-hygiene";
 import { dockStateKey } from "@/components/dock-state-key";
 import { clearOpeningPrompt, readOpeningPromptEntry, stashOpeningPrompt, OPENING_PROMPT_FAILURE } from "@/components/opening-prompt";
 import { forwardDockWheel, useDockHeight } from "@/components/dock-height";
+import { useKeyboardInset, usePhoneLayout } from "@/components/phone-layout-context";
+import { markExplicitSubmit } from "@/components/enter-chord";
 import { createDockMorph } from "@/components/dock-morph";
 import { QueuedSteersBody, type QueuedSteerLine } from "@/components/queued-steers";
 import { DictationBar, finishDictation, joinDictation, useDictation, type Dictation } from "@/components/dictation";
@@ -310,6 +312,8 @@ export function Chat({
 		useChatSession({ chatId, initialMessages, initialError, initiallyInFlight });
 
 	const controller = useOptionalInteractionLayers();
+	// A phone title at the desktop 30px scale crowds out the chips beside it.
+	const titleSize = usePhoneLayout().compactTitle ? "text-xl" : "text-3xl";
 	const sessionFindScopeRef = useRef<HTMLDivElement | null>(null);
 	const pathname = usePathname();
 	const surfaceTarget = usePageSurfaceBoundary({ active: pathname === `/chat/${encodeURIComponent(chatId)}`, viewKey: chatId, bodyRef: sessionFindScopeRef });
@@ -1664,7 +1668,7 @@ export function Chat({
 								data-plugin-chrome-title
 								aria-label="Session title"
 								title="Rename this session"
-								className="lh-no-drag min-w-[8ch] max-w-[70%] shrink-0 bg-transparent font-title text-3xl tracking-tight caret-current outline-none [field-sizing:content]"
+								className={cn("lh-no-drag min-w-[8ch] max-w-[70%] shrink-0 bg-transparent font-title tracking-tight caret-current outline-none [field-sizing:content]", titleSize)}
 							/>
 							{/* flex-1 spacer during rename too, so the chips stay at
 							    the right edge; clicks here commit via the header
@@ -1686,7 +1690,7 @@ export function Chat({
 								setRenaming(true);
 							}}
 							data-plugin-chrome-title
-							className="lh-no-drag -mx-1.5 min-w-4 shrink cursor-text truncate rounded-md px-1.5 text-left font-title text-3xl tracking-tight transition-colors hover:bg-accent"
+							className={cn("lh-no-drag -mx-1.5 min-w-4 shrink cursor-text truncate rounded-md px-1.5 text-left font-title tracking-tight transition-colors hover:bg-accent", titleSize)}
 						>
 							{titleText}
 							</button>
@@ -2212,7 +2216,7 @@ export function Chat({
 						onSend={() => {
 							const input = citationEdit.input?.isConnected ? citationEdit.input : citeInput();
 							if (input === composerInputRef.current) onSend();
-							else if (input) requestAnimationFrame(() => input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })));
+							else if (input) requestAnimationFrame(() => input.dispatchEvent(markExplicitSubmit(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }))));
 						}}
 					/>
 				)}
@@ -2373,6 +2377,10 @@ function TranscriptElementReporter({ onElement }: { onElement: (element: HTMLEle
 }
 
 /** Host-only composition/test seam; never part of the plugin SDK. */
+/** pb-5 (1.25rem) plus the on-screen keyboard's inset (phone-layout-context
+ *  writes --lh-keyboard-inset; it is 0px without a keyboard or provider). */
+const DOCK_BLOCK_STYLE: React.CSSProperties = { paddingBottom: "calc(1.25rem + var(--lh-keyboard-inset, 0px))" };
+
 export function DockOverlay({
 	viewReader, viewTargets, unavailableOccurrence,
 	pending,
@@ -2660,10 +2668,12 @@ export function DockOverlay({
 	if (!heightMorphRef.current) heightMorphRef.current = createDockMorph();
 	const retargetOpening = useCallback(() => heightMorphRef.current?.retarget(stateKey), [stateKey]);
 	useIsoLayoutEffect(() => () => heightMorphRef.current?.dispose(), []);
+	// The on-screen keyboard shrinks the room above the dock (phone).
+	const keyboard = useKeyboardInset();
 	useDockHeight({
 		scrollRef, blockRef, viewportRef, bodyRef, shellRef, contentRef,
 		expanded, enabled: ownsDock, mode, onScrollbarInset: setSbInset, onHeight: offer,
-		onLayout: retargetOpening,
+		onLayout: retargetOpening, maxColumnHeight: keyboard.dockMaxHeight,
 	});
 
 	// GROWTH MUTE (owner round, 2026-10-05 — the generation churn): during a
@@ -2841,7 +2851,9 @@ export function DockOverlay({
 	return (
 		<div className="pointer-events-none absolute inset-x-0 bottom-0" style={{ right: sbInset }}>
 			<div className="h-24 bg-gradient-to-t from-background via-background/85 to-transparent" />
-			<div ref={blockRef} className="relative bg-background pb-5">
+			{/* pb-5 plus the keyboard inset: the dock rides above an on-screen
+			    keyboard (and the home indicator); 0px everywhere else. */}
+			<div ref={blockRef} className="relative bg-background" style={DOCK_BLOCK_STYLE}>
 				<div className={DOCK}>
 					<div ref={viewportRef} data-dock-viewport="" className="pointer-events-auto">
 					<div ref={bodyRef}>

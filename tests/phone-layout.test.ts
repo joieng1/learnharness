@@ -178,6 +178,10 @@ describe("enterKey (text fields)", () => {
 		assert.equal(enterKey({ ...key, enterInsertsNewline: true, metaKey: true }), "submit");
 		assert.equal(enterKey({ ...key, enterInsertsNewline: true, ctrlKey: true }), "submit");
 	});
+
+	it("an explicit (app-dispatched) submit Enter submits even where Enter inserts newlines", () => {
+		assert.equal(enterKey({ ...key, enterInsertsNewline: true, explicitSubmit: true }), "submit");
+	});
 });
 
 describe("copyVisibility", () => {

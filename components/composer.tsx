@@ -7,6 +7,8 @@ import { PathInput } from "@/components/path-input";
 import { AttachFilesButton } from "@/components/attach-files-button";
 import { useOptionalInteractionLayers } from "./interaction-layers";
 import { isInteractionScopeEligible } from "./plugin-input-focus";
+import { isSubmitEnter } from "@/components/enter-chord";
+import { usePhoneLayout } from "@/components/phone-layout-context";
 
 /**
  * The chat composer — content row ONLY (the persistent rounded shell lives in
@@ -149,6 +151,7 @@ export function Composer({
 	fileInsertion?: boolean;
 }) {
 	const controller = useOptionalInteractionLayers();
+	const { enterInsertsNewline } = usePhoneLayout();
 	const act = () => {
 		const action = enterAction({ busy, canSend, nextProblem });
 		if (action === "stop") onStop();
@@ -188,7 +191,8 @@ export function Composer({
 					// Chat convention: Enter sends, Shift+Enter is a newline.
 					// ⌘/Ctrl+Enter also sends — the universal submit shortcut
 					// across every input in the app (thinking field, answers).
-					if (e.key === "Enter" && (e.metaKey || e.ctrlKey || !e.shiftKey)) {
+					// On a touch phone Enter is the newline and the button sends.
+					if (isSubmitEnter(e, enterInsertsNewline)) {
 						e.preventDefault();
 						act();
 					}

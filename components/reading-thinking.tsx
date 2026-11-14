@@ -4,6 +4,8 @@ import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from "
 import { joinDictation, useDictationTarget } from "@/components/dictation";
 import { composingQuestionKey, pluginQuestionKeySuppressed } from "./plugin-question-keys";
 import { PathInput } from "@/components/path-input";
+import { isSubmitEnter } from "@/components/enter-chord";
+import { usePhoneLayout } from "@/components/phone-layout-context";
 import { useOptionalInteractionLayers } from "./interaction-layers";
 import { isInteractionScopeEligible } from "./plugin-input-focus";
 
@@ -46,6 +48,7 @@ export function ReadingThinkingField({
 	inputRef?: RefObject<HTMLDivElement | null>;
 }) {
 	const controller = useOptionalInteractionLayers();
+	const { enterInsertsNewline } = usePhoneLayout();
 	const [draft, setDraft] = useState(value);
 	// Appends may arrive back-to-back before React commits. Like Chat's
 	// submit mirror, this ref includes every edit synchronously.
@@ -97,8 +100,10 @@ export function ReadingThinkingField({
 					// 2026-10-06): while the check sits closed, plain Enter
 					// (and the universal ⌘/Ctrl+Enter) opens it — the dictation
 					// flush lands HERE first via the caller's finishDictation,
-					// so spoken thoughts ride along. Shift+Enter stays a newline.
-					if (e.key === "Enter" && onOpen !== undefined && (!e.shiftKey || e.metaKey || e.ctrlKey)) {
+					// so spoken thoughts ride along. Shift+Enter stays a newline,
+					// and so does a plain Enter on a touch phone (the dock bar's
+					// "Open" opens it there).
+					if (onOpen !== undefined && isSubmitEnter(e, enterInsertsNewline)) {
 						e.preventDefault();
 						e.stopPropagation();
 						onOpen();
