@@ -32,6 +32,30 @@ npm start              # serve the production build with Next
 
 `npm run desktop:dist` is the local **signed macOS** packaging path, not a portable unsigned shortcut. Prerequisites and Windows/Linux instructions are in [Desktop builds and releases](desktop-release.md).
 
+### Production shutdown under a supervisor
+
+Send `SIGTERM` or `SIGINT` to the Next server and allow it to drain requests.
+The live-updates channel (`/api/events`) closes on shutdown and sends
+`Connection: close` so its HTTP/1.1 socket is released when the response ends.
+Tabs reconnect and refetch state after a restart.
+Next retains ownership of request draining, pending `after()` callbacks, and
+process exit: `SIGTERM` exits with code 143; `SIGINT` with code 130.
+
+For a systemd service stopped with `SIGTERM`, include:
+
+```ini
+[Service]
+SuccessExitStatus=143
+TimeoutStopSec=30
+```
+
+The timeout is a safety net for other active requests, including lesson turns,
+which continue until they settle. Remove any interim
+`NEXT_MANUAL_SIG_HANDLE=1` setting when using this fix. That setting disables
+Next's signal handlers, so LearnHarness then installs no shutdown listener
+either: `SIGTERM` ends the process immediately, without closing the
+live-updates channel or draining requests.
+
 ### Other devices on your network
 
 `npm run dev`, `npm start`, and `desktop:dev` listen on `localhost` only. Browser-only mode has **no login**: anyone who can reach the port can read every chat and setting, change saved keys, and start agent turns. To open it from another device on a network you trust, pass a later host flag:

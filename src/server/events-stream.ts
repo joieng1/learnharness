@@ -19,12 +19,15 @@
  * unnecessary, harmless, and it makes dead-connection detection cheap).
  *
  * The DIFFERENCE from the turn stream is lifetime: a turn's stream ends at
- * settle ([DONE]); this channel ends when the CLIENT goes away — cancel()
- * is the only end, and it must leave the bus untouched for other windows.
+ * settle ([DONE]); this channel ends when the client goes away or the
+ * server shuts down. Each teardown leaves the bus intact for other windows.
  * The closure shape (teardown assigned in start, called in cancel) is the
  * ui-stream subscribe() pattern.
  */
 import { subscribe, type ServerEvent } from "../core/events.ts";
+import { onServerShutdown } from "./shutdown.ts";
+
+const HEARTBEAT_INTERVAL_MS = 25_000;
 
 /** One window's subscription as an SSE Response. */
 export function eventsResponse(): Response {
@@ -35,11 +38,13 @@ export function eventsResponse(): Response {
 			let closed = false;
 			let heartbeat: ReturnType<typeof setInterval> | undefined;
 			let unsubscribe: (() => void) | undefined;
+			let unsubscribeShutdown: (() => void) | undefined;
 
 			const stop = () => {
 				if (closed) return;
 				closed = true;
 				unsubscribe?.();
+				unsubscribeShutdown?.();
 				if (heartbeat) clearInterval(heartbeat);
 			};
 			// Enqueue is the ONLY place the socket can reject us (the reader
@@ -61,9 +66,16 @@ export function eventsResponse(): Response {
 				const { type, ...payload } = event;
 				frame(`event: ${type}\ndata: ${JSON.stringify(payload)}\n\n`);
 			});
-			heartbeat = setInterval(() => frame(": ping\n\n"), 25_000);
+			heartbeat = setInterval(() => frame(": ping\n\n"), HEARTBEAT_INTERVAL_MS);
 
 			teardown = stop;
+			// Register after resources exist: shutdown may already be underway
+			// and notify this connection synchronously.
+			unsubscribeShutdown = onServerShutdown(() => {
+				if (closed) return;
+				stop();
+				controller.close();
+			});
 		},
 		cancel() {
 			// The view went away: drop the listener + timer. The bus keeps
@@ -76,6 +88,9 @@ export function eventsResponse(): Response {
 			"Content-Type": "text/event-stream",
 			"Cache-Control": "no-cache, no-transform",
 			"X-Accel-Buffering": "no",
+			// A finished SSE response must release its HTTP/1.1 socket too;
+			// otherwise browser keep-alive can still block Next's server.close().
+			"Connection": "close",
 		},
 	});
 }

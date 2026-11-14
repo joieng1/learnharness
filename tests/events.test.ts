@@ -78,13 +78,15 @@ function decode(chunk: Uint8Array): string {
 }
 
 describe("eventsResponse (the SSE seam)", () => {
-	it("holds an SSE response: event frames as they are emitted", async () => {
+	it("holds an SSE response: event frames as they are emitted", async (t) => {
 		const res = eventsResponse();
+		const reader = res.body!.getReader();
+		t.after(() => reader.cancel());
 		assert.equal(res.status, 200);
 		assert.equal(res.headers.get("Content-Type"), "text/event-stream");
 		assert.equal(res.headers.get("Cache-Control"), "no-cache, no-transform");
 		assert.equal(res.headers.get("X-Accel-Buffering"), "no");
-		const reader = res.body!.getReader();
+		assert.equal(res.headers.get("Connection"), "close");
 		// The listener attached synchronously in start() — emit NOW lands
 		// as a queued chunk (no race, single-threaded).
 		emit("turn-started", { chatId: "chat_x" });
@@ -114,10 +116,9 @@ describe("eventsResponse (the SSE seam)", () => {
 		await r2.cancel();
 	});
 
-	it("the connection ends WITHOUT a [DONE] sentinel — the client owns the lifetime", async () => {
-		// A turn's stream terminates itself; the notification channel never
-		// self-closes. Pin the difference: settled events do NOT close the
-		// stream — it stays live for the next event.
+	it("settled events keep the channel open for subsequent notifications", async () => {
+		// Turn settlement does not end a notification channel. It stays live
+		// until the client disconnects or the server shuts down.
 		const res = eventsResponse();
 		const reader = res.body!.getReader();
 		emit("turn-settled", { chatId: "chat_z" });
