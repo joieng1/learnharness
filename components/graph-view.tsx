@@ -63,7 +63,9 @@
  * camera never moves.
  */
 
-import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { usePhoneLayout } from "@/components/phone-layout-context";
+import { cn } from "@/lib/utils";
 import { NotesImportControl, NotesImportErrors, NotesImportNotices, useNotesImport } from "@/components/notes-import.tsx";
 import { PluginGraphActions } from "@/components/plugin-chrome";
 import { SettingsSlider as SettingSlider } from "@/components/settings/controls";
@@ -72,6 +74,7 @@ import { FileTextIcon, ListTreeIcon, Loader2Icon, SearchIcon, SettingsIcon, Wayp
 import { incrementalLayout, propositionSessionHref, type GraphCostSummary, type GraphNode, type GraphSnapshot } from "@/src/core";
 import { planCostLabel } from "@/components/usage-format";
 import { CLUSTER_LIGHTNESS, GraphCanvasRenderer, type GraphRenderSettings } from "./graph-canvas.ts";
+import { isCameraMove, type Camera } from "./graph-touch.ts";
 import { useAppearance } from "@/components/settings/appearance";
 import { usePopoverDismiss } from "@/components/popover-dismiss";
 import { INTERACTION_LAYER_Z_BASE } from "@/components/host-dialog";
@@ -796,6 +799,12 @@ function GraphSettingsControl({
 	);
 }
 
+/** The phone's second tool row (port decision D10): Chains, Import and the
+ *  gear under the search, so the row never reaches the menu button. */
+function SecondToolRow({ children }: { children: React.ReactNode }) {
+	return <div className="flex items-start gap-2">{children}</div>;
+}
+
 /** The top-chrome actions row's body (empty-graph chrome wave, owner
  *  2026-09-25): Import Notes renders ALWAYS (graph enabled) — it's the
  *  one action that works on an empty graph, the entry point itself;
@@ -805,6 +814,7 @@ function GraphSettingsControl({
  *  appear-once transition as the first nodes land). Exported pure for
  *  the empty/populated SSR pins (the DeleteNodeBody pattern). */
 export function GraphChromeRow({
+	rows = 1,
 	isEmpty,
 	query,
 	onQuery,
@@ -816,6 +826,10 @@ export function GraphChromeRow({
 	changeSettings,
 	onOpenChains,
 }: {
+	/** 2 on a phone-width browser (port decision D10): search alone on the
+	 *  first row, the actions on a second. Desktop keeps the owner's one
+	 *  row (2026-09-20). */
+	rows?: 1 | 2;
 	isEmpty: boolean;
 	query: string;
 	onQuery: (v: string) => void;
@@ -831,6 +845,7 @@ export function GraphChromeRow({
 	 *  2026-09-29). */
 	onOpenChains: () => void;
 }) {
+	const ActionsRow = rows === 2 ? SecondToolRow : Fragment;
 	return (
 		<>
 			{!isEmpty && (
@@ -859,6 +874,7 @@ export function GraphChromeRow({
 					)}
 				</div>
 			)}
+			<ActionsRow>
 			{/* The chain table (chains overlay, owner plan 2026-09-29). Own
 			    container (36px band), between the search and Import. */}
 			<div className="graph-chrome-fade-in shrink-0 rounded-xl border bg-card/85 px-1 py-[3px] shadow-lg backdrop-blur">
@@ -887,6 +903,7 @@ export function GraphChromeRow({
 					<GraphSettingsControl settings={settings} changeSettings={changeSettings} />
 				</div>
 			)}
+			</ActionsRow>
 		</>
 	);
 }
@@ -920,6 +937,20 @@ export function NodeCardText({ name, statement }: Pick<GraphNode, "name" | "stat
 
 /** Keep the existing placement policy as static Markdown finishes rendering:
  * diagrams, plugin blocks and font reflow can resize a card after selection. */
+/** Anchored card: placed imperatively by observeNodeCardPosition, hidden
+ *  until placed so the flip never flashes in the wrong spot. */
+const ANCHORED_CARD_STYLE: React.CSSProperties = { visibility: "hidden", left: 0, top: 0 };
+/** Phone bottom sheet: pinned above the home indicator; the layout effect
+ *  reveals it. */
+const BOTTOM_SHEET_STYLE: React.CSSProperties = { visibility: "hidden", bottom: "calc(0.5rem + env(safe-area-inset-bottom))" };
+
+/** Blurs a focused text field so the on-screen keyboard closes. */
+function dismissKeyboard(): void {
+	const active = document.activeElement;
+	if (!(active instanceof HTMLElement)) return;
+	if (active.isContentEditable || active.matches("input, textarea, select")) active.blur();
+}
+
 export function observeNodeCardPosition(card: HTMLDivElement, container: HTMLDivElement, anchor: { x: number; y: number }): () => void {
 	const place = () => {
 		const width = card.offsetWidth;
@@ -967,6 +998,7 @@ export function GraphView({
 	const cardRef = useRef<HTMLDivElement | null>(null);
 	const { resolvedMode, colors } = useAppearance();
 	const [snapshot, setSnapshot] = useState<GraphSnapshot | null>(null);
+	const { graphToolRows, nodeCard } = usePhoneLayout();
 	const [selected, setSelected] = useState<Selection | null>(null);
 	// The latest snapshot for the renderer's click callbacks (they are
 	// constructed once, so they read through this ref, never a closure).
@@ -1289,6 +1321,8 @@ export function GraphView({
 	// away (the empty-graph placeholder replaces it). The callbacks are
 	// created once and read through refs, so they never go stale.
 	const isEmpty = snapshot === null || snapshot.nodes.length === 0;
+	// The empty graph has no search, so the actions stay a single row.
+	const toolRows = isEmpty ? 1 : graphToolRows;
 	useEffect(() => {
 		if (isEmpty) return;
 		const canvas = canvasRef.current;
@@ -1315,7 +1349,10 @@ export function GraphView({
 		// Debounced camera writes: a pan emits hundreds of transforms per
 		// second; one trailing write per quiet spell is plenty.
 		let cameraTimer: ReturnType<typeof setTimeout> | null = null;
-		let lastCamera: { k: number; x: number; y: number } | null = null;
+		let lastCamera: Camera | null = null;
+		/** The camera when the card or menu opened — the reference a later
+		 *  camera event must really move away from to close them. */
+		let openedAtCamera: Camera | null = null;
 		const persistCamera = (t: { k: number; x: number; y: number }) => {
 			lastCamera = t;
 			if (cameraTimer) clearTimeout(cameraTimer);
@@ -1335,6 +1372,7 @@ export function GraphView({
 					const snap = snapshotRef.current;
 					const node = snap?.nodes.find((n) => n.id === nodeId);
 					if (!snap || !node) return;
+					openedAtCamera = lastCamera;
 					setSelected({
 						node,
 						sourceIds: snap.nodeSessions[node.id] ?? [],
@@ -1353,16 +1391,22 @@ export function GraphView({
 					}
 					const node = snapshotRef.current?.nodes.find((n) => n.id === nodeId);
 					if (!node) return;
+					openedAtCamera = lastCamera;
 					setCtxNode({ id: node.id, name: node.name, x: pos.x, y: pos.y });
 				},
 				// Any camera move detaches the card from its node — close
 				// it, and (debounced) remember where the camera stands. The
 				// context menu closes with it: a menu floating over a moved
-				// graph is anchored to nothing.
+				// graph is anchored to nothing. A finger's sub-slop drift
+				// during a touch hold is not a move (isCameraMove) — it
+				// would close the long-press menu the moment it opened.
 				onCameraMove: (t) => {
+					const moved = isCameraMove(openedAtCamera, t);
+					persistCamera(t);
+					if (!moved) return;
+					openedAtCamera = null;
 					setSelected(null);
 					setCtxNode(null);
-					persistCamera(t);
 				},
 				// Live physics settled: persist the new rest state. Fire-and-
 				// forget — the next snapshot fetch carries the ledger anyway.
@@ -1464,8 +1508,15 @@ export function GraphView({
 		const card = cardRef.current;
 		const container = containerRef.current;
 		if (!selected || !card || !container) return;
+		if (nodeCard === "bottom-sheet") {
+			// The sheet sits at the bottom; a focused field's keyboard would
+			// cover it (port decision D12) — tapping a node doesn't move focus.
+			dismissKeyboard();
+			card.style.visibility = "visible";
+			return;
+		}
 		return observeNodeCardPosition(card, container, selected.anchor);
-	}, [selected, isEmpty]);
+	}, [selected, isEmpty, nodeCard]);
 
 	return (
 		<div className="relative h-full w-full">
@@ -1563,7 +1614,9 @@ export function GraphView({
 			    flex-wrap (narrow-window wave, 2026-09-17) folded the row
 			    onto two lines below the sidebar threshold — owner rejected
 			    it (2026-09-20): one row always, the search shrinks (see
-			    the header-band comment on the column below). */}
+			    the header-band comment on the column below). The one
+			    exception is a phone-width browser (port decision D10):
+			    search on its own row, the actions under it. */}
 			{/* Header band (owner, 2026-09-20): the controls sit IN the
 			    header's visual row — top-2 aligns with the sidebar toggle's
 			    band (header py-2, toggle h-9), every control slimmed to 36px.
@@ -1577,11 +1630,12 @@ export function GraphView({
 			    the settings/coverage dropdowns (owner report), still hoverable
 			    and clickable on top of them. The row is a stacking context, so
 			    its open dropdowns cover the number; clicks land on the panel. */}
-			<div className="relative z-20 flex min-w-0 items-start gap-2">
+			<div className={cn("relative z-20 flex min-w-0 items-start gap-2", toolRows === 2 && "flex-col items-end")}>
 				{/* The actions row (empty-graph chrome wave, owner 2026-09-25):
 				    Import Notes always — the empty graph's entry point; search +
 				    settings only when nodes exist, fading in on their mount. */}
 				<GraphChromeRow
+					rows={toolRows}
 					isEmpty={isEmpty}
 					query={query}
 					onQuery={setQuery}
@@ -1622,11 +1676,15 @@ export function GraphView({
 					ref={cardRef}
 					// Positioned imperatively in the layout effect above; hidden
 					// until placed so the flip never flashes in the wrong spot.
-					style={{ visibility: "hidden", left: 0, top: 0 }}
+					style={nodeCard === "bottom-sheet" ? BOTTOM_SHEET_STYLE : ANCHORED_CARD_STYLE}
+					data-placement={nodeCard}
 					// lh-no-drag: the card is placed anywhere on the canvas —
 					// when it lands in the top strip it must stay interactive
 					// over home.tsx's drag surface (2026-09-17).
-					className="lh-no-drag absolute z-10 w-80 max-w-[calc(100%-1rem)] rounded-xl border bg-card p-4 text-left shadow-lg"
+					className={cn(
+						"lh-no-drag absolute z-10 w-80 max-w-[calc(100%-1rem)] rounded-xl border bg-card p-4 text-left shadow-lg",
+						nodeCard === "bottom-sheet" && "inset-x-2 w-auto max-w-none max-h-[60%] overflow-y-auto",
+					)}
 				>
 					<NodeCardText name={selected.node.name} statement={selected.node.statement} />
 					{selected.sourceIds.length > 0 ? (

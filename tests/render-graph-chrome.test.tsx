@@ -198,3 +198,28 @@ describe("node detail card placement", () => {
 		}
 	});
 });
+
+describe("GraphChromeRow — the phone's two tool rows (port decision D10)", () => {
+	/** The top-level element tags of the row's markup, in order. */
+	function topLevel(html: string): Element[] {
+		const { document } = parseHTML(`<div id="root">${html}</div>`);
+		return [...document.getElementById("root")!.children];
+	}
+
+	it("desktop default (1 row): search, chains, import and gear are siblings", () => {
+		const children = topLevel(renderToStaticMarkup(createElement(GraphChromeRow, { ...PROPS, isEmpty: false })));
+		assert.ok(children.length >= 4, "every control is a direct child of the one row");
+		assert.ok(children[0]!.innerHTML.includes("Search nodes…"));
+	});
+
+	it("phone (2 rows): search alone first, the actions grouped in a second row", () => {
+		const children = topLevel(renderToStaticMarkup(createElement(GraphChromeRow, { ...PROPS, rows: 2, isEmpty: false })));
+		assert.equal(children.length, 2);
+		assert.ok(children[0]!.innerHTML.includes("Search nodes…"));
+		const actions = children[1]!.innerHTML;
+		assert.ok(actions.includes('data-testid="open-chain-table"'));
+		assert.ok(actions.includes('data-testid="import-notes"'));
+		assert.ok(actions.includes("lucide-settings"));
+		assert.ok(!actions.includes("Search nodes…"));
+	});
+});

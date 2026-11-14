@@ -55,6 +55,8 @@ import { select } from "d3-selection";
 import { zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } from "d3-zoom";
 import type { Simulation, SimulationLinkDatum } from "d3-force";
 import { clusterHue, type Pt } from "./cluster-geometry.ts";
+import { longPressGate, type LongPressEvent } from "./graph-touch.ts";
+import { LONG_PRESS_MS, pointerGesture } from "./phone-layout.ts";
 import type { RenderedMode } from "@/src/core";
 import {
 	CHARGE_STRENGTH,
@@ -615,6 +617,12 @@ export class GraphCanvasRenderer {
 	private dragOrigin: Pt | null = null;
 	private simMoved = false; // any real movement since the last commit
 	private commitTimer: ReturnType<typeof setTimeout> | null = null;
+	/** Touch has no right-click: a still hold on a node opens its context
+	 *  menu instead (upstream PR #243). */
+	private longPressTimer: ReturnType<typeof setTimeout> | null = null;
+	/** A hold fired — the browser's own touch contextmenu that may follow
+	 *  must not reopen the menu (see longPressGate). */
+	private longPressFired = false;
 
 	private frameId: number | null = null;
 	private dirty = true;
@@ -707,6 +715,7 @@ export class GraphCanvasRenderer {
 		canvas.addEventListener("pointermove", this.onPointerMove);
 		canvas.addEventListener("pointerdown", this.onPointerDown);
 		canvas.addEventListener("pointerup", this.onPointerUp);
+		canvas.addEventListener("pointercancel", this.onPointerCancel);
 		canvas.addEventListener("pointerleave", this.onPointerLeave);
 		// Right-click → the caller's context menu (node interlude). Always
 		// preventDefault: the native menu on a full-bleed custom canvas is
@@ -912,6 +921,7 @@ export class GraphCanvasRenderer {
 	destroy(): void {
 		if (this.frameId !== null) cancelAnimationFrame(this.frameId);
 		if (this.commitTimer) clearTimeout(this.commitTimer);
+		this.cancelLongPress();
 		this.sim = null;
 		this.simActive = false;
 		this.dragId = null;
@@ -921,6 +931,7 @@ export class GraphCanvasRenderer {
 		this.canvas.removeEventListener("pointermove", this.onPointerMove);
 		this.canvas.removeEventListener("pointerdown", this.onPointerDown);
 		this.canvas.removeEventListener("pointerup", this.onPointerUp);
+		this.canvas.removeEventListener("pointercancel", this.onPointerCancel);
 		this.canvas.removeEventListener("pointerleave", this.onPointerLeave);
 		this.canvas.removeEventListener("contextmenu", this.onContextMenu);
 		this.canvas.style.cursor = "";
@@ -948,9 +959,10 @@ export class GraphCanvasRenderer {
 		if (this.dragId) {
 			const n = this.simById.get(this.dragId);
 			if (n) {
-				const moved =
-					this.dragOrigin !== null &&
-					Math.hypot(pos.x - this.dragOrigin.x, pos.y - this.dragOrigin.y) > CLICK_SLOP;
+				const travel =
+					this.dragOrigin === null ? 0 : Math.hypot(pos.x - this.dragOrigin.x, pos.y - this.dragOrigin.y);
+				if (pointerGesture({ holdMs: 0, travelPx: travel }) === "pan") this.cancelLongPress();
+				const moved = travel > CLICK_SLOP;
 				if (moved) {
 					// First real movement: reheat and glue the node to the cursor.
 					if (this.commitTimer) {
@@ -977,6 +989,7 @@ export class GraphCanvasRenderer {
 		// pin the node — right-click belongs to the context menu alone, and
 		// the right-pointerup must never read as a click (the detail card
 		// used to open under the menu).
+		this.trackLongPress({ kind: "pointerdown" });
 		if (e.button !== 0) return;
 		const pos = this.eventPos(e);
 		const node = this.pickAt(pos.x, pos.y);
@@ -1001,6 +1014,7 @@ export class GraphCanvasRenderer {
 			}
 			this.canvas.style.cursor = "grabbing";
 			this.markDirty();
+			if (e.pointerType !== "mouse") this.startLongPress(node.id, e.pointerId, pos);
 			return;
 		}
 		this.downPos = pos;
@@ -1008,32 +1022,17 @@ export class GraphCanvasRenderer {
 	};
 
 	private onPointerUp = (e: PointerEvent) => {
+		this.cancelLongPress();
 		if (e.button !== 0) return; // right-click is context-menu territory
 		// Node press ending: click (no slop) → select; drag → release-and-relax.
 		if (this.dragId) {
 			const id = this.dragId;
-			this.dragId = null;
-			this.dragOrigin = null;
-			try {
-				this.canvas.releasePointerCapture(e.pointerId);
-			} catch {
-				/* already released */
-			}
-			this.canvas.style.cursor = "";
-			const n = this.simById.get(id);
-			if (n) {
-				n.fx = null;
-				n.fy = null;
-			}
-			if (this.simActive) {
-				// Real drag: the sim anneals to the new rest state; advanceSim
-				// detects the settle and schedules the commit.
-				this.sim?.alphaTarget(0);
-				this.markDirty();
-			} else {
-				// Never heated: a plain click on the node.
-				this.callbacks.onSelect(id, this.eventPos(e));
-			}
+			// A real drag heated the sim: releasing lets it anneal to the new
+			// rest state (advanceSim detects the settle and schedules the
+			// commit). Never heated: a plain click on the node.
+			const dragged = this.simActive;
+			this.releaseNodePress(e.pointerId);
+			if (!dragged) this.callbacks.onSelect(id, this.eventPos(e));
 			return;
 		}
 		if (!this.downPos) return;
@@ -1050,10 +1049,67 @@ export class GraphCanvasRenderer {
 	 *  the caller (empty stage = null — the caller closes any open menu). */
 	private onContextMenu = (e: MouseEvent) => {
 		e.preventDefault();
+		if (this.trackLongPress({ kind: "contextmenu" })) return;
 		const pos = this.eventPos(e);
 		const node = this.pickAt(pos.x, pos.y);
 		this.callbacks.onContext(node?.id ?? null, pos);
 	};
+
+	/** The browser took the touch (a second finger for pinch, a scroll):
+	 *  drop the hold and any node pin without selecting. */
+	private onPointerCancel = (e: PointerEvent) => {
+		this.cancelLongPress();
+		this.releaseNodePress(e.pointerId);
+		this.downPos = null;
+	};
+
+	/** Feeds the long-press gate; true when a contextmenu is the echo of a
+	 *  hold that already opened the menu. */
+	private trackLongPress(event: LongPressEvent): boolean {
+		const gate = longPressGate(this.longPressFired, event);
+		this.longPressFired = gate.fired;
+		return gate.swallowContextMenu;
+	}
+
+	private startLongPress(id: string, pointerId: number, pos: Pt): void {
+		this.cancelLongPress();
+		this.longPressTimer = setTimeout(() => this.fireLongPress(id, pointerId, pos), LONG_PRESS_MS);
+	}
+
+	private cancelLongPress(): void {
+		if (this.longPressTimer) clearTimeout(this.longPressTimer);
+		this.longPressTimer = null;
+	}
+
+	/** The hold completed still: release the pin (no click follows the
+	 *  lift) and open the same context menu a right-click opens. */
+	private fireLongPress(id: string, pointerId: number, pos: Pt): void {
+		this.longPressTimer = null;
+		this.trackLongPress({ kind: "fire" });
+		this.releaseNodePress(pointerId);
+		this.callbacks.onContext(id, pos);
+	}
+
+	/** Un-pins the pressed node without selecting it. */
+	private releaseNodePress(pointerId: number): void {
+		const id = this.dragId;
+		if (!id) return;
+		this.dragId = null;
+		this.dragOrigin = null;
+		try {
+			this.canvas.releasePointerCapture(pointerId);
+		} catch {
+			/* already released */
+		}
+		this.canvas.style.cursor = "";
+		const n = this.simById.get(id);
+		if (n) {
+			n.fx = null;
+			n.fy = null;
+		}
+		if (this.simActive) this.sim?.alphaTarget(0);
+		this.markDirty();
+	}
 
 	private onPointerLeave = () => {
 		if (this.dragId) return; // pointer capture keeps the drag alive

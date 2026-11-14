@@ -85,7 +85,10 @@ export function PluginSidebarActions({ children }: { children: ReactNode }) {
 
 export function PluginGraphActions() {
 	const { snapshot } = usePlugins();
-	const { open } = useSidebar();
+	const sidebar = useSidebar();
+	// The phone drawer floats over the page, so the hamburger keeps its
+	// top-left slot and the column stays below it (as SidebarToggle reads it).
+	const open = sidebar.open && !sidebar.overlay;
 	const actions = placedPluginActions(snapshot.plugins, GRAPH_CONTEXT);
 	if (!actions.length) return null;
 	// Only buttons intercept canvas input. Wheel events over a button still
