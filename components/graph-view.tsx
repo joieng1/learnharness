@@ -74,7 +74,7 @@ import { FileTextIcon, ListTreeIcon, Loader2Icon, SearchIcon, SettingsIcon, Wayp
 import { incrementalLayout, propositionSessionHref, type GraphCostSummary, type GraphNode, type GraphSnapshot } from "@/src/core";
 import { planCostLabel } from "@/components/usage-format";
 import { CLUSTER_LIGHTNESS, GraphCanvasRenderer, type GraphRenderSettings } from "./graph-canvas.ts";
-import { isCameraMove, type Camera } from "./graph-touch.ts";
+import { closesOnCameraEvent, type Camera, type OpenedAnchor } from "./graph-touch.ts";
 import { useAppearance } from "@/components/settings/appearance";
 import { usePopoverDismiss } from "@/components/popover-dismiss";
 import { INTERACTION_LAYER_Z_BASE } from "@/components/host-dialog";
@@ -1350,9 +1350,9 @@ export function GraphView({
 		// second; one trailing write per quiet spell is plenty.
 		let cameraTimer: ReturnType<typeof setTimeout> | null = null;
 		let lastCamera: Camera | null = null;
-		/** The camera when the card or menu opened — the reference a later
-		 *  camera event must really move away from to close them. */
-		let openedAtCamera: Camera | null = null;
+		/** How the card or menu opened — the camera then, and whether a
+		 *  finger did it (only touch tolerates jitter; closesOnCameraEvent). */
+		let opened: OpenedAnchor | null = null;
 		const persistCamera = (t: { k: number; x: number; y: number }) => {
 			lastCamera = t;
 			if (cameraTimer) clearTimeout(cameraTimer);
@@ -1368,11 +1368,11 @@ export function GraphView({
 		const renderer = new GraphCanvasRenderer(
 			canvas,
 			{
-				onSelect: (nodeId, pos) => {
+				onSelect: (nodeId, pos, touch) => {
 					const snap = snapshotRef.current;
 					const node = snap?.nodes.find((n) => n.id === nodeId);
 					if (!snap || !node) return;
-					openedAtCamera = lastCamera;
+					opened = { camera: lastCamera, touch };
 					setSelected({
 						node,
 						sourceIds: snap.nodeSessions[node.id] ?? [],
@@ -1384,27 +1384,27 @@ export function GraphView({
 				// (empty stage) closes a stale menu; a pick opens one anchored
 				// at the pointer. The name comes from the snapshot — what the
 				// canvas shows is what the menu and dialog speak.
-				onContext: (nodeId, pos) => {
+				onContext: (nodeId, pos, touch) => {
 					if (nodeId === null) {
 						setCtxNode(null);
 						return;
 					}
 					const node = snapshotRef.current?.nodes.find((n) => n.id === nodeId);
 					if (!node) return;
-					openedAtCamera = lastCamera;
+					opened = { camera: lastCamera, touch };
 					setCtxNode({ id: node.id, name: node.name, x: pos.x, y: pos.y });
 				},
 				// Any camera move detaches the card from its node — close
 				// it, and (debounced) remember where the camera stands. The
 				// context menu closes with it: a menu floating over a moved
 				// graph is anchored to nothing. A finger's sub-slop drift
-				// during a touch hold is not a move (isCameraMove) — it
-				// would close the long-press menu the moment it opened.
+				// during a touch hold is not a move (closesOnCameraEvent) —
+				// it would close the long-press menu the moment it opened.
 				onCameraMove: (t) => {
-					const moved = isCameraMove(openedAtCamera, t);
+					const closes = closesOnCameraEvent(opened, t);
 					persistCamera(t);
-					if (!moved) return;
-					openedAtCamera = null;
+					if (!closes) return;
+					opened = null;
 					setSelected(null);
 					setCtxNode(null);
 				},

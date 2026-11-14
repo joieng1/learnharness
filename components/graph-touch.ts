@@ -50,3 +50,21 @@ export function isCameraMove(from: Camera | null, to: Camera): boolean {
 	const panned = Math.hypot(to.x - from.x, to.y - from.y) >= GESTURE_SLOP;
 	return zoomed || panned;
 }
+
+/** What the node card or context menu was opened with. */
+export interface OpenedAnchor {
+	/** The camera at open time (null before the first camera event). */
+	camera: Camera | null;
+	/** Opened by a finger (a tap or a long-press), not a mouse or pen. */
+	touch: boolean;
+}
+
+/**
+ * Whether a camera event closes the open card/menu. Only a finger drifts
+ * during a hold, so only touch gets the jitter allowance; a mouse or pen
+ * keeps v0.6.1's rule that any camera event closes.
+ */
+export function closesOnCameraEvent(opened: OpenedAnchor | null, to: Camera): boolean {
+	if (opened === null || !opened.touch) return true;
+	return isCameraMove(opened.camera, to);
+}

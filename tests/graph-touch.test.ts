@@ -6,7 +6,7 @@
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { isCameraMove, longPressGate, type LongPressEvent } from "../components/graph-touch.ts";
+import { closesOnCameraEvent, isCameraMove, longPressGate, type LongPressEvent } from "../components/graph-touch.ts";
 
 // Every press clears the mark, whatever the button or target — the names
 // keep each scenario readable.
@@ -72,5 +72,28 @@ describe("isCameraMove (finger jitter is not a camera move)", () => {
 
 	it("with no camera recorded at open time, any event closes (today's behaviour)", () => {
 		assert.equal(isCameraMove(null, at), true);
+	});
+});
+
+describe("closesOnCameraEvent (the jitter allowance is for touch only)", () => {
+	const at = { k: 1.5, x: 120, y: -40 };
+	const jitter = { k: 1.5, x: 122, y: -38.5 };
+
+	it("a card opened by mouse closes on any camera event, as in v0.6.1", () => {
+		assert.equal(closesOnCameraEvent({ camera: at, touch: false }, { ...at }), true);
+		assert.equal(closesOnCameraEvent({ camera: at, touch: false }, jitter), true);
+	});
+
+	it("a card opened by touch ignores sub-slop jitter", () => {
+		assert.equal(closesOnCameraEvent({ camera: at, touch: true }, jitter), false);
+	});
+
+	it("a card opened by touch closes on a real pan", () => {
+		assert.equal(closesOnCameraEvent({ camera: at, touch: true }, { k: 1.5, x: 125, y: -40 }), true);
+	});
+
+	it("nothing open (or no camera recorded) closes on any event", () => {
+		assert.equal(closesOnCameraEvent(null, at), true);
+		assert.equal(closesOnCameraEvent({ camera: null, touch: true }, at), true);
 	});
 });

@@ -155,12 +155,14 @@ export interface CanvasData {
 }
 
 export interface RendererCallbacks {
-	/** A node was clicked (screen position included for card anchoring). */
-	onSelect: (nodeId: string, screenPos: Pt) => void;
+	/** A node was clicked (screen position included for card anchoring).
+	 *  `touch`: a finger did it (the caller tolerates finger jitter). */
+	onSelect: (nodeId: string, screenPos: Pt, touch: boolean) => void;
 	/** Right-click: the picked node (canvas-relative screen position) or
 	 *  null when the pointer hit empty stage — the caller opens/closes
-	 *  its context menu accordingly. (node interlude, wave 7) */
-	onContext: (nodeId: string | null, screenPos: Pt) => void;
+	 *  its context menu accordingly. (node interlude, wave 7) `touch`: a
+	 *  finger's long-press or the browser's touch contextmenu. */
+	onContext: (nodeId: string | null, screenPos: Pt, touch: boolean) => void;
 	/** The empty stage was clicked. */
 	onStageClick: () => void;
 	/** Any camera move (pan/zoom) — the caller dismisses anchored UI and
@@ -510,6 +512,12 @@ export function pickNearest<T extends { id: string; x: number; y: number }>(
 	return best;
 }
 
+/** A finger, not a mouse or pen. A contextmenu is a PointerEvent in current
+ *  engines but a plain MouseEvent in older ones — those count as not touch. */
+function isTouch(e: MouseEvent): boolean {
+	return "pointerType" in e && (e as PointerEvent).pointerType === "touch";
+}
+
 // ─── Canvas text helpers (ported verbatim) ─────────────────────────────────
 
 /** "#rrggbb" + alpha → "rgba(...)". */
@@ -623,6 +631,9 @@ export class GraphCanvasRenderer {
 	/** A hold fired — the browser's own touch contextmenu that may follow
 	 *  must not reopen the menu (see longPressGate). */
 	private longPressFired = false;
+	/** The pending hold is a finger's (a pen also long-presses, but does
+	 *  not drift, so it keeps the mouse's close-on-any-camera rule). */
+	private longPressTouch = false;
 
 	private frameId: number | null = null;
 	private dirty = true;
@@ -1014,7 +1025,10 @@ export class GraphCanvasRenderer {
 			}
 			this.canvas.style.cursor = "grabbing";
 			this.markDirty();
-			if (e.pointerType !== "mouse") this.startLongPress(node.id, e.pointerId, pos);
+			if (e.pointerType !== "mouse") {
+				this.longPressTouch = isTouch(e);
+				this.startLongPress(node.id, e.pointerId, pos);
+			}
 			return;
 		}
 		this.downPos = pos;
@@ -1032,7 +1046,7 @@ export class GraphCanvasRenderer {
 			// commit). Never heated: a plain click on the node.
 			const dragged = this.simActive;
 			this.releaseNodePress(e.pointerId);
-			if (!dragged) this.callbacks.onSelect(id, this.eventPos(e));
+			if (!dragged) this.callbacks.onSelect(id, this.eventPos(e), isTouch(e));
 			return;
 		}
 		if (!this.downPos) return;
@@ -1041,7 +1055,7 @@ export class GraphCanvasRenderer {
 		this.downPos = null;
 		if (moved > CLICK_SLOP) return; // that was a drag (pan), not a click
 		const node = this.pickAt(pos.x, pos.y);
-		if (node) this.callbacks.onSelect(node.id, pos);
+		if (node) this.callbacks.onSelect(node.id, pos, isTouch(e));
 		else this.callbacks.onStageClick();
 	};
 
@@ -1052,7 +1066,7 @@ export class GraphCanvasRenderer {
 		if (this.trackLongPress({ kind: "contextmenu" })) return;
 		const pos = this.eventPos(e);
 		const node = this.pickAt(pos.x, pos.y);
-		this.callbacks.onContext(node?.id ?? null, pos);
+		this.callbacks.onContext(node?.id ?? null, pos, isTouch(e));
 	};
 
 	/** The browser took the touch (a second finger for pinch, a scroll):
@@ -1087,7 +1101,7 @@ export class GraphCanvasRenderer {
 		this.longPressTimer = null;
 		this.trackLongPress({ kind: "fire" });
 		this.releaseNodePress(pointerId);
-		this.callbacks.onContext(id, pos);
+		this.callbacks.onContext(id, pos, this.longPressTouch);
 	}
 
 	/** Un-pins the pressed node without selecting it. */
