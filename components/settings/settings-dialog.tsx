@@ -29,12 +29,16 @@ import {
 	useId,
 	useRef,
 	useState,
+	type CSSProperties,
 	type ReactElement,
 	type ReactNode,
 	type RefObject,
 } from "react";
 import { BotIcon, KeyIcon, KeyboardIcon, PaletteIcon, PlugIcon, PuzzleIcon, SettingsIcon, WaypointsIcon, type LucideIcon } from "lucide-react";
 import { HostDialog } from "@/components/host-dialog";
+import { cn } from "@/lib/utils";
+import { SHEET_DIALOG_FRAME } from "@/components/phone-layout";
+import { usePhoneLayout } from "@/components/phone-layout-context";
 import { useInteractionLayers, type CloseOutcome } from "@/components/interaction-layers";
 import {
 	CURRENT_SETTINGS_VERSION,
@@ -73,6 +77,16 @@ const SECTIONS = [
 	{ id: "general", label: "General", icon: SettingsIcon },
 ] as const;
 type SectionId = (typeof SECTIONS)[number]["id"] | "plugins" | "core-plugins" | `plugin:${string}`;
+
+const DESKTOP_NAV = "flex min-h-0 w-48 shrink-0 flex-col gap-1 overflow-y-auto border-r border-border p-2";
+/** On the phone sheet the left column becomes a sideways-scrolling tab row,
+ *  so the content keeps the full screen width. */
+const SHEET_NAV = "flex shrink-0 flex-row gap-1 overflow-x-auto border-b border-border p-2";
+const DESKTOP_NAV_DIVIDER = "my-2 border-border";
+/** The core/plugin group dividers turn vertical inside the tab row. */
+const SHEET_NAV_DIVIDER = "mx-1 h-5 w-px shrink-0 self-center border-0 bg-border";
+/** Keeps the last settings field scrollable above the iOS keyboard. */
+const SHEET_CONTENT_STYLE: CSSProperties = { paddingBottom: "var(--lh-keyboard-inset, 0px)" };
 
 /** `open(section?, row?)` — the optional ROW deep-links into the Keys
  *  section with that row unfolded (zero-keys wave: the dictation error's
@@ -228,6 +242,7 @@ export function SettingsDialogBody({
 		};
 	}, []);
 	const [active, setActive] = useState<SectionId>(initialSection);
+	const { sheetDialogs } = usePhoneLayout();
 	// A deep-link fired while the dialog is ALREADY open (first exercised by
 	// the wave-6 embedding picker's "Add a provider key first…" link — the
 	// picker itself died with wave 7, the mechanism is general) changes
@@ -341,6 +356,7 @@ export function SettingsDialogBody({
 		[onAppearanceChange, writeOrder],
 	);
 
+	const navDivider = sheetDialogs ? SHEET_NAV_DIVIDER : DESKTOP_NAV_DIVIDER;
 	const frame = (
 		<div
 			tabIndex={-1}
@@ -348,7 +364,7 @@ export function SettingsDialogBody({
 			aria-modal="true"
 			aria-label="Settings"
 			data-testid="settings-dialog"
-			className="settings-dialog-pop flex h-[620px] max-h-[85vh] w-[920px] max-w-[90vw] flex-col overflow-hidden rounded-md border border-border bg-card shadow-xl"
+			className={cn("settings-dialog-pop flex h-[620px] max-h-[85vh] w-[920px] max-w-[90vw] flex-col overflow-hidden rounded-md border border-border bg-card shadow-xl", sheetDialogs && SHEET_DIALOG_FRAME)}
 			onClick={(e) => e.stopPropagation()}
 		>
 			{/* Header — the app's quiet CMU title language. */}
@@ -380,32 +396,34 @@ export function SettingsDialogBody({
 					</Hint>
 			</header>
 
-			<div className="flex min-h-0 flex-1">
+			<div className={cn("flex min-h-0 flex-1", sheetDialogs && "flex-col")}>
 				{/* Left nav — mono labels and theme-inherited decorative icons,
 					    active = bg-accent. */}
 				<nav
 					aria-label="Settings sections"
 					data-testid="settings-nav"
-					className="flex min-h-0 w-48 shrink-0 flex-col gap-1 overflow-y-auto border-r border-border p-2"
+					className={sheetDialogs ? SHEET_NAV : DESKTOP_NAV}
 				>
 					{navSections.map((s, index) => (
-						<div key={s.id} className="shrink-0">
-							{index === SECTIONS.length && <hr className="my-2 border-border" />}
+						<div key={s.id} className={sheetDialogs ? "flex shrink-0 items-center gap-1" : "shrink-0"}>
+							{index === SECTIONS.length && <hr className={navDivider} />}
 							<button
 								type="button"
 								data-testid={`settings-nav-${s.id}`}
 								aria-current={selected === s.id}
-								className={`flex w-full items-center gap-2 break-words rounded-sm px-3 py-1.5 text-left font-ui text-sm transition-colors ${
+								className={cn(
+									"flex items-center gap-2 rounded-sm px-3 py-1.5 text-left font-ui text-sm transition-colors",
+									sheetDialogs ? "w-auto whitespace-nowrap" : "w-full break-words",
 									selected === s.id
 										? "bg-accent text-foreground"
-										: "text-muted-foreground hover:bg-accent hover:text-foreground"
-								}`}
+										: "text-muted-foreground hover:bg-accent hover:text-foreground",
+								)}
 								onClick={() => setActive(s.id)}
 							>
 								{s.icon && <s.icon aria-hidden="true" focusable="false" className="size-3.5 shrink-0" />}
 								<span className="min-w-0">{s.label}</span>
 							</button>
-							{s.id === "plugins" && <hr className="my-2 border-border" />}
+							{s.id === "plugins" && <hr className={navDivider} />}
 						</div>
 					))}
 				</nav>
@@ -419,6 +437,7 @@ export function SettingsDialogBody({
 				<div
 					ref={contentRef}
 					className="min-w-0 flex-1 overflow-y-auto"
+					style={sheetDialogs ? SHEET_CONTENT_STYLE : undefined}
 					data-testid="settings-content"
 				>
 					{error && !activePluginId && selected !== "plugins" && selected !== "core-plugins" && (

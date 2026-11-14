@@ -178,6 +178,11 @@ export function modelMenuWidth(viewportWidth: number): number {
 	return Math.min(MODEL_MENU_WIDTH, viewportWidth - MODEL_MENU_GUTTERS);
 }
 
+/** Merged (cn) over a centred dialog frame when `sheetDialogs`: the frame
+ *  fills the phone screen, clear of the notch and the home indicator. */
+export const SHEET_DIALOG_FRAME =
+	"h-dvh max-h-none w-screen max-w-none rounded-none border-0 pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]";
+
 /** Travel in px that turns a press into a pan (the graph's click slop). */
 export const GESTURE_SLOP = 4;
 /** A still press held this long opens the node's context menu on touch. */

@@ -36,6 +36,8 @@ export type DraftPick = { id: string; name: string; statement: string };
  */
 
 const DOCK = "mx-auto w-full max-w-[46rem] px-4";
+/** pb-4 plus the on-screen keyboard's inset (0 off phones). */
+const DRAFT_DOCK_STYLE: React.CSSProperties = { paddingBottom: "calc(1rem + var(--lh-keyboard-inset, 0px))" };
 
 /**
  * Create, safely hand over the full opening text, then return a short
@@ -188,7 +190,7 @@ export function DraftShell({
 							</ConversationContent>
 						</Conversation>
 						<div className="h-24 bg-gradient-to-t from-background via-background/85 to-transparent" />
-						<div className="bg-background pb-4">
+						<div className="bg-background" style={DRAFT_DOCK_STYLE}>
 							<div className={DOCK}>
 								<ComposerActions
 									picker={(picks.length > 0 || mode === "practice") && (

@@ -19,6 +19,8 @@ import { OPENING_PROMPT_FAILURE } from "@/components/opening-prompt";
 import { PathInput } from "@/components/path-input";
 import { AttachFilesButton } from "@/components/attach-files-button";
 import { SessionStarter } from "@/components/start-session";
+import { isSubmitEnter } from "@/components/enter-chord";
+import { usePhoneLayout } from "@/components/phone-layout-context";
 import type { TurnUsage } from "@/src/core";
 
 /**
@@ -27,6 +29,9 @@ import type { TurnUsage } from "@/src/core";
  * under the header and the new-session dock, both of which float over it
  * with no gradient scrims. Sessions live in the toggleable sidebar.
  */
+/** pb-5 plus the on-screen keyboard's inset (0 off phones). */
+const HOME_DOCK_STYLE: React.CSSProperties = { paddingBottom: "calc(1.25rem + var(--lh-keyboard-inset, 0px))" };
+
 export function Home({
 	initialConfigured,
 	rendering = true,
@@ -38,6 +43,7 @@ export function Home({
 	rendering?: boolean;
 }) {
 	const controller = useOptionalInteractionLayers();
+	const { enterInsertsNewline } = usePhoneLayout();
 	const router = useRouter();
 	const pathname = usePathname();
 	const bodyRef = useRef<HTMLDivElement>(null);
@@ -209,7 +215,8 @@ export function Home({
 			    OVER the graph (no gradient: the graph runs clean under it to the
 			    bottom edge). Matches chat.tsx's DOCK geometry (max-w-[46rem]
 			    px-4) so nothing shifts when a session starts (owner). */}
-			<div className="pointer-events-none absolute inset-x-0 bottom-0 pb-5">
+			{/* The bottom padding (pb-5) rides above the phone keyboard. */}
+			<div className="pointer-events-none absolute inset-x-0 bottom-0" style={HOME_DOCK_STYLE}>
 				<div className="pointer-events-auto mx-auto w-full max-w-[46rem] px-4">
 					{/* The pick bar (owner vision, 2026-10-04): the chain
 					    table's selection is PERSISTENT — picked
@@ -270,7 +277,8 @@ export function Home({
 								dictation.cancel();
 								return;
 							}
-							if (e.key === "Enter" && !e.shiftKey) {
+							// A phone's Enter types a newline; ↵ (the start button) starts.
+							if (isSubmitEnter(e, enterInsertsNewline)) {
 								e.preventDefault();
 								void start();
 							}

@@ -44,6 +44,9 @@ import { type ModelCatalogEntry, type ModelSlotName, type ModelsSettings, CUSTOM
 import { prettyModel } from "@/components/usage-format";
 import { ModelMenuList } from "@/components/settings/model-menu";
 import { MenuShell } from "@/components/menu-shell";
+import { cn } from "@/lib/utils";
+import { SHEET_DIALOG_FRAME } from "@/components/phone-layout";
+import { useModelMenuWidth, usePhoneLayout } from "@/components/phone-layout-context";
 import { notifySettingsSaved, useSettingsSaved } from "@/components/settings-signal";
 import { useModelCatalog } from "@/components/model-catalog";
 import { savedSlotsConfigured } from "@/components/setup-cta";
@@ -55,6 +58,10 @@ import { NativeSubscriptionBackgroundAccess, SubscriptionConnections } from "@/c
 import { defaultOrderLevel, populateLevel, THINKING_LABEL } from "@/components/thinking-default";
 import { ThinkingMenuList } from "@/components/settings/model-menu";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
+
+/** The phone sheet's scrolling stages keep their last field reachable
+ *  above the iOS keyboard (dvh does not shrink for it). */
+const SHEET_BODY_STYLE: React.CSSProperties = { paddingBottom: "calc(1.25rem + var(--lh-keyboard-inset, 0px))" };
 
 /** The pickers' slot identity — same roster language as the Agent
  *  section's slot rows. */
@@ -160,6 +167,7 @@ export function SetupKeysBody({
 	isCustom?: boolean;
 	onCustomSaved?: () => void;
 }) {
+	const menuWidth = useModelMenuWidth();
 	return (
 		<div className="flex flex-col gap-3 px-6 py-5" data-testid="setup-stage-keys">
 			<p className="text-xs text-muted-foreground">
@@ -187,6 +195,7 @@ export function SetupKeysBody({
 							onClose={() => { onCloseMenu?.(); return "closed"; }}
 							preferredSide="down"
 							align="left"
+							width={menuWidth}
 							menuClass="flex w-[22rem] flex-col rounded-xl border border-border bg-card p-2 text-xs shadow-xl"
 						>
 							<ProviderMenuList providers={providers ?? []} onPick={onPick} />
@@ -268,6 +277,8 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [openMenu, setOpenMenu] = useState<{ slot: ModelSlotName; kind: "model" | "thinking" } | null>(null);
+	const { sheetDialogs } = usePhoneLayout();
+	const menuWidth = useModelMenuWidth();
 	// Stage 1's first-key screen (zero-keys wave): the provider roster,
 	// the chosen provider + pasted value, its busy/error pair, and its own
 	// menu-open bit (the slot menus' dismissal machinery covers it too —
@@ -434,7 +445,7 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 	return <HostDialog open onClose={() => { onClose(); return "closed"; }} aria-label="Set up your models"
 		backdropProps={{ className: "fixed inset-0 z-50 flex items-center justify-center bg-background/80", "data-testid": "setup-backdrop" }}
 		frame={<div data-testid="setup-dialog"
-			className="settings-dialog-pop flex max-h-[85vh] w-[640px] max-w-[90vw] flex-col overflow-hidden rounded-md border border-border bg-card shadow-xl"
+			className={cn("settings-dialog-pop flex max-h-[85vh] w-[640px] max-w-[90vw] flex-col overflow-hidden rounded-md border border-border bg-card shadow-xl", sheetDialogs && SHEET_DIALOG_FRAME)}
 			onClick={(e) => e.stopPropagation()} />}>
 				<header className="flex h-15 shrink-0 items-center gap-3 border-b border-border px-5">
 					<h2 className="font-title text-2xl tracking-tight">Set up your models</h2>
@@ -459,9 +470,9 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 				{stage === "loading" ? (
 					!failed && <p data-testid="setup-stage-loading" role="status" className="px-6 py-5 text-xs text-muted-foreground">Loading models…</p>
 				) : stage === "keys" ? (
-					<div className="flex flex-col px-6 py-5">{keysBody}</div>
+					<div className={cn("flex flex-col px-6 py-5", sheetDialogs && "overflow-y-auto")} style={sheetDialogs ? SHEET_BODY_STYLE : undefined}>{keysBody}</div>
 				) : (
-					<div className="flex flex-col gap-4 overflow-y-auto px-6 py-5" data-testid="setup-stage-pickers">
+					<div className="flex flex-col gap-4 overflow-y-auto px-6 py-5" style={sheetDialogs ? SHEET_BODY_STYLE : undefined} data-testid="setup-stage-pickers">
 						<p className="text-xs text-muted-foreground">
 							Pick the model for each tier. All three are required before chats can start.
 						</p>
@@ -523,6 +534,7 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 													onClose={() => { setOpenMenu(null); return "closed"; }}
 													preferredSide="down"
 													align="left"
+													width={menuWidth}
 													menuClass="flex w-[22rem] flex-col rounded-xl border border-border bg-card p-2 text-xs shadow-xl"
 												>
 													<ModelMenuList

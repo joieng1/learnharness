@@ -55,6 +55,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { CacheRetention } from "@earendil-works/pi-ai";
 import { CacheRetentionMenu, cacheRetentionLabel } from "./cache-retention-menu.tsx";
 import { MenuShell } from "@/components/menu-shell";
+import { useModelMenuWidth } from "@/components/phone-layout-context";
 import { useInteractionLayers } from "@/components/interaction-layers";
 import { useSettingsSaved } from "@/components/settings-signal";
 import { defaultOrderLevel, populateLevel } from "@/components/thinking-default";
@@ -369,6 +370,7 @@ export function AgentSection({
 	onCompactionChange: (next: CompactionSettings) => boolean | Promise<boolean>;
 }) {
 	const { catalog: body, failed: catalogFailed, refresh: refreshCatalog } = useModelCatalog();
+	const menuWidth = useModelMenuWidth();
 	const catalog = body?.models;
 	const slots = body?.slots;
 	/** The live search state (/api/search) — the row's reason line. */
@@ -744,6 +746,7 @@ export function AgentSection({
 											anchorTestid={`slot-model-${slot}`}
 										testid={`slot-model-menu-${slot}`}
 										onClose={() => { setOpenMenu(null); return "closed"; }}
+										width={menuWidth}
 										menuClass="flex w-[22rem] flex-col rounded-xl border border-border bg-card p-2 text-xs shadow-xl"
 									>
 										<ModelMenuList
